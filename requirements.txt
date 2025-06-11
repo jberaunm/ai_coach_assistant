@@ -83,3 +83,5 @@ uvicorn==0.34.2
 websockets==15.0.1
 wrapt==1.17.2
 zipp==3.21.0
+stravalib==2.3
+litellm==1.72.4
