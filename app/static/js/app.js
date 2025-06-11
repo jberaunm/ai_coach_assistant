@@ -3,34 +3,39 @@
  */
 
 /**
- * SSE (Server-Sent Events) handling
+ * WebSocket handling
  */
 
-// Connect the server with SSE
+// Global variables
 const sessionId = Math.random().toString().substring(10);
-const sse_url =
-  "http://" + window.location.host + "/events/" + sessionId;
-const send_url =
-  "http://" + window.location.host + "/send/" + sessionId;
-let eventSource = null;
+const ws_url = "ws://" + window.location.host + "/ws/" + sessionId;
+let websocket = null;
 let is_audio = false;
+let currentMessageId = null; // Track the current message ID during a conversation turn
 
 // Get DOM elements
 const messageForm = document.getElementById("messageForm");
 const messageInput = document.getElementById("message");
 const messagesDiv = document.getElementById("messages");
-let currentMessageId = null;
+const statusDot = document.getElementById("status-dot");
+const connectionStatus = document.getElementById("connection-status");
+const typingIndicator = document.getElementById("typing-indicator");
+const startAudioButton = document.getElementById("startAudioButton");
+const stopAudioButton = document.getElementById("stopAudioButton");
+const recordingContainer = document.getElementById("recording-container");
 
-// SSE handlers
-function connectSSE() {
-  // Connect to SSE endpoint
-  eventSource = new EventSource(sse_url + "?is_audio=" + is_audio);
+// WebSocket handlers
+function connectWebsocket() {
+  // Connect websocket
+  const wsUrl = ws_url + "?is_audio=" + is_audio;
+  websocket = new WebSocket(wsUrl);
 
   // Handle connection open
-  eventSource.onopen = function () {
+  websocket.onopen = function () {
     // Connection opened messages
-    console.log("SSE connection opened.");
-    document.getElementById("messages").textContent = "Connection opened";
+    console.log("WebSocket connection opened.");
+    connectionStatus.textContent = "Connected";
+    statusDot.classList.add("connected");
 
     // Enable the Send button
     document.getElementById("sendButton").disabled = false;
@@ -38,71 +43,128 @@ function connectSSE() {
   };
 
   // Handle incoming messages
-  eventSource.onmessage = function (event) {
+  websocket.onmessage = function (event) {
     // Parse the incoming message
     const message_from_server = JSON.parse(event.data);
     console.log("[AGENT TO CLIENT] ", message_from_server);
 
-    // Check if the turn is complete
-    // if turn complete, add new message
+    // Show typing indicator for first message in a response sequence,
+    // but not for turn_complete messages
     if (
-      message_from_server.turn_complete &&
-      message_from_server.turn_complete == true
+      !message_from_server.turn_complete &&
+      (message_from_server.mime_type === "text/plain" ||
+        message_from_server.mime_type === "audio/pcm")
     ) {
-      currentMessageId = null;
-      return;
+      typingIndicator.classList.add("visible");
     }
 
-    // Check for interrupt message
+    // Check if the turn is complete
     if (
-      message_from_server.interrupted &&
-      message_from_server.interrupted === true
+      message_from_server.turn_complete &&
+      message_from_server.turn_complete === true
     ) {
-      // Stop audio playback if it's playing
-      if (audioPlayerNode) {
-        audioPlayerNode.port.postMessage({ command: "endOfAudio" });
-      }
+      // Reset currentMessageId to ensure the next message gets a new element
+      currentMessageId = null;
+      typingIndicator.classList.remove("visible");
       return;
     }
 
     // If it's audio, play it
-    if (message_from_server.mime_type == "audio/pcm" && audioPlayerNode) {
+    if (message_from_server.mime_type === "audio/pcm" && audioPlayerNode) {
       audioPlayerNode.port.postMessage(base64ToArray(message_from_server.data));
+
+      // If we have an existing message element for this turn, add audio icon if needed
+      if (currentMessageId) {
+        const messageElem = document.getElementById(currentMessageId);
+        if (
+          messageElem &&
+          !messageElem.querySelector(".audio-icon") &&
+          is_audio
+        ) {
+          const audioIcon = document.createElement("span");
+          audioIcon.className = "audio-icon";
+          messageElem.prepend(audioIcon);
+        }
+      }
     }
 
-    // If it's a text, print it
-    if (message_from_server.mime_type == "text/plain") {
-      // add a new message for a new turn
-      if (currentMessageId == null) {
-        currentMessageId = Math.random().toString(36).substring(7);
-        const message = document.createElement("p");
-        message.id = currentMessageId;
-        // Append the message element to the messagesDiv
-        messagesDiv.appendChild(message);
+    // Handle text messages
+    if (message_from_server.mime_type === "text/plain") {
+      // Hide typing indicator
+      typingIndicator.classList.remove("visible");
+
+      const role = message_from_server.role || "model";
+
+      // If we already have a message element for this turn, append to it
+      if (currentMessageId && role === "model") {
+        const existingMessage = document.getElementById(currentMessageId);
+        if (existingMessage) {
+          // Append the text without adding extra spaces
+          // Use a span element to maintain proper text flow
+          const textNode = document.createTextNode(message_from_server.data);
+          existingMessage.appendChild(textNode);
+
+          // Scroll to the bottom
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          return;
+        }
       }
 
-      // Add message text to the existing message element
-      const message = document.getElementById(currentMessageId);
-      message.textContent += message_from_server.data;
+      // Create a new message element if it's a new turn or user message
+      const messageId = Math.random().toString(36).substring(7);
+      const messageElem = document.createElement("p");
+      messageElem.id = messageId;
 
-      // Scroll down to the bottom of the messagesDiv
+      // Set class based on role
+      messageElem.className =
+        role === "user" ? "user-message" : "agent-message";
+
+      // Add audio icon for model messages if audio is enabled
+      if (is_audio && role === "model") {
+        const audioIcon = document.createElement("span");
+        audioIcon.className = "audio-icon";
+        messageElem.appendChild(audioIcon);
+      }
+
+      // Add the text content
+      messageElem.appendChild(
+        document.createTextNode(message_from_server.data)
+      );
+
+      // Add the message to the DOM
+      messagesDiv.appendChild(messageElem);
+
+      // Remember the ID of this message for subsequent responses in this turn
+      if (role === "model") {
+        currentMessageId = messageId;
+      }
+
+      // Scroll to the bottom
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
   };
 
   // Handle connection close
-  eventSource.onerror = function (event) {
-    console.log("SSE connection error or closed.");
+  websocket.onclose = function () {
+    console.log("WebSocket connection closed.");
     document.getElementById("sendButton").disabled = true;
-    document.getElementById("messages").textContent = "Connection closed";
-    eventSource.close();
+    connectionStatus.textContent = "Disconnected. Reconnecting...";
+    statusDot.classList.remove("connected");
+    typingIndicator.classList.remove("visible");
     setTimeout(function () {
       console.log("Reconnecting...");
-      connectSSE();
+      connectWebsocket();
     }, 5000);
   };
+
+  websocket.onerror = function (e) {
+    console.log("WebSocket error: ", e);
+    connectionStatus.textContent = "Connection error";
+    statusDot.classList.remove("connected");
+    typingIndicator.classList.remove("visible");
+  };
 }
-connectSSE();
+connectWebsocket();
 
 // Add submit handler to the form
 function addSubmitHandler() {
@@ -111,35 +173,32 @@ function addSubmitHandler() {
     const message = messageInput.value;
     if (message) {
       const p = document.createElement("p");
-      p.textContent = "> " + message;
+      p.textContent = message;
+      p.className = "user-message";
       messagesDiv.appendChild(p);
       messageInput.value = "";
+
+      // Show typing indicator after sending message
+      typingIndicator.classList.add("visible");
+
       sendMessage({
         mime_type: "text/plain",
         data: message,
+        role: "user",
       });
       console.log("[CLIENT TO AGENT] " + message);
+      // Scroll down to the bottom of the messagesDiv
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     return false;
   };
 }
 
-// Send a message to the server via HTTP POST
-async function sendMessage(message) {
-  try {
-    const response = await fetch(send_url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message)
-    });
-    
-    if (!response.ok) {
-      console.error('Failed to send message:', response.statusText);
-    }
-  } catch (error) {
-    console.error('Error sending message:', error);
+// Send a message to the server as a JSON string
+function sendMessage(message) {
+  if (websocket && websocket.readyState == WebSocket.OPEN) {
+    const messageJson = JSON.stringify(message);
+    websocket.send(messageJson);
   }
 }
 
@@ -163,10 +222,7 @@ let audioPlayerContext;
 let audioRecorderNode;
 let audioRecorderContext;
 let micStream;
-
-// Audio buffering for 0.2s intervals
-let audioBuffer = [];
-let bufferTimer = null;
+let isRecording = false;
 
 // Import the audio worklets
 import { startAudioPlayerWorklet } from "./audio-player.js";
@@ -185,73 +241,87 @@ function startAudio() {
       audioRecorderNode = node;
       audioRecorderContext = ctx;
       micStream = stream;
+      isRecording = true;
     }
   );
 }
 
+// Stop audio recording
+function stopAudio() {
+  if (audioRecorderNode) {
+    audioRecorderNode.disconnect();
+    audioRecorderNode = null;
+  }
+
+  if (audioRecorderContext) {
+    audioRecorderContext
+      .close()
+      .catch((err) => console.error("Error closing audio context:", err));
+    audioRecorderContext = null;
+  }
+
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
+  }
+
+  isRecording = false;
+}
+
 // Start the audio only when the user clicked the button
 // (due to the gesture requirement for the Web Audio API)
-const startAudioButton = document.getElementById("startAudioButton");
 startAudioButton.addEventListener("click", () => {
   startAudioButton.disabled = true;
+  startAudioButton.textContent = "Voice Enabled";
+  startAudioButton.style.display = "none";
+  stopAudioButton.style.display = "inline-block";
+  recordingContainer.style.display = "flex";
   startAudio();
   is_audio = true;
-  eventSource.close(); // close current connection
-  connectSSE(); // reconnect with the audio mode
+
+  // Add class to messages container to enable audio styling
+  messagesDiv.classList.add("audio-enabled");
+
+  connectWebsocket(); // reconnect with the audio mode
+});
+
+// Stop audio recording when stop button is clicked
+stopAudioButton.addEventListener("click", () => {
+  stopAudio();
+  stopAudioButton.style.display = "none";
+  startAudioButton.style.display = "inline-block";
+  startAudioButton.disabled = false;
+  startAudioButton.textContent = "Enable Voice";
+  recordingContainer.style.display = "none";
+
+  // Remove audio styling class
+  messagesDiv.classList.remove("audio-enabled");
+
+  // Reconnect without audio mode
+  is_audio = false;
+
+  // Only reconnect if the connection is still open
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
+    websocket.close();
+    // The onclose handler will trigger reconnection
+  }
 });
 
 // Audio recorder handler
 function audioRecorderHandler(pcmData) {
-  // Add audio data to buffer
-  audioBuffer.push(new Uint8Array(pcmData));
-  
-  // Start timer if not already running
-  if (!bufferTimer) {
-    bufferTimer = setInterval(sendBufferedAudio, 200); // 0.2 seconds
-  }
-}
+  // Only send data if we're still recording
+  if (!isRecording) return;
 
-// Send buffered audio data every 0.2 seconds
-function sendBufferedAudio() {
-  if (audioBuffer.length === 0) {
-    return;
-  }
-  
-  // Calculate total length
-  let totalLength = 0;
-  for (const chunk of audioBuffer) {
-    totalLength += chunk.length;
-  }
-  
-  // Combine all chunks into a single buffer
-  const combinedBuffer = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of audioBuffer) {
-    combinedBuffer.set(chunk, offset);
-    offset += chunk.length;
-  }
-  
-  // Send the combined audio data
+  // Send the pcm data as base64
   sendMessage({
     mime_type: "audio/pcm",
-    data: arrayBufferToBase64(combinedBuffer.buffer),
+    data: arrayBufferToBase64(pcmData),
   });
-  console.log("[CLIENT TO AGENT] sent %s bytes", combinedBuffer.byteLength);
-  
-  // Clear the buffer
-  audioBuffer = [];
-}
 
-// Stop audio recording and cleanup
-function stopAudioRecording() {
-  if (bufferTimer) {
-    clearInterval(bufferTimer);
-    bufferTimer = null;
-  }
-  
-  // Send any remaining buffered audio
-  if (audioBuffer.length > 0) {
-    sendBufferedAudio();
+  // Log every few samples to avoid flooding the console
+  if (Math.random() < 0.01) {
+    // Only log ~1% of audio chunks
+    console.log("[CLIENT TO AGENT] sent audio data");
   }
 }
 

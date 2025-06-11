@@ -23,7 +23,7 @@ def list_activities() -> dict:
         
         # Get today's date
         #today = datetime.now().strftime("%Y-%m-%d")
-        today = "2025-06-04"
+        today = "2025-06-10"
         activities = client.get_activities(after=today, limit=10)
 
         if not activities:

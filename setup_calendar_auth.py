@@ -31,7 +31,8 @@ def setup_oauth():
         print("2. Create a new project or select an existing one")
         print("3. Enable the Google Calendar API")
         print("4. Create OAuth 2.0 credentials (Desktop application)")
-        print("5. Download the credentials and save them as 'credentials.json' in this directory"
+        print(
+            "5. Download the credentials and save them as 'credentials.json' in this directory"
         )
         print("\nThen run this script again.")
         return False
