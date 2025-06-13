@@ -227,6 +227,18 @@ let isRecording = false;
 // Import the audio worklets
 import { startAudioPlayerWorklet } from "./audio-player.js";
 import { startAudioRecorderWorklet } from "./audio-recorder.js";
+import { initializeFileUpload } from "./file-upload.js";
+
+// Initialize file upload when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Wait for WebSocket connection before initializing file upload
+    const checkWebSocket = setInterval(() => {
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            clearInterval(checkWebSocket);
+            initializeFileUpload(websocket);
+        }
+    }, 100);
+});
 
 // Start audio
 function startAudio() {

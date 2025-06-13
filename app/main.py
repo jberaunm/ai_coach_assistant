@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import AsyncIterable
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, WebSocket
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Query, WebSocket, UploadFile, File
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from google.adk.agents import LiveRequestQueue
 from google.adk.agents.run_config import RunConfig
@@ -174,15 +174,72 @@ async def client_to_agent_messaging(
 
 app = FastAPI()
 
-STATIC_DIR = Path("static")
+# Get the absolute path to the app directory
+APP_DIR = Path(__file__).parent
+STATIC_DIR = APP_DIR / "static"
+UPLOAD_DIR = APP_DIR / "uploads"
+
+# Store active WebSocket connections
+websocket_connections = {}
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-@app.get("/")
-async def root():
+@app.get("/", response_class=HTMLResponse)
+async def get():
     """Serves the index.html"""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(STATIC_DIR / "index.html")
 
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)):
+    try:
+        print(f"Received file upload request for session {session_id}")
+        print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
+        
+        # Create a safe filename
+        safe_filename = file.filename.replace(" ", "_")
+        file_path = UPLOAD_DIR / safe_filename
+        
+        # Save the file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Send a message through WebSocket
+        if session_id in websocket_connections:
+            print(f"Sending WebSocket message to session {session_id}")
+            # Send the acknowledgment message
+            message = {
+                "mime_type": "text/plain",
+                "data": f"I've received your file '{safe_filename}'. I'll analyze it and get back to you shortly.",
+                "role": "model"
+            }
+            await websocket_connections[session_id].send_text(json.dumps(message))
+            
+            # Send turn_complete to ensure proper message separation
+            turn_complete = {
+                "turn_complete": True,
+                "interrupted": None
+            }
+            await websocket_connections[session_id].send_text(json.dumps(turn_complete))
+            
+            print(f"WebSocket message sent successfully to session {session_id}")
+        else:
+            print(f"No WebSocket connection found for session {session_id}")
+        
+        return {
+            "status": "success",
+            "message": "File uploaded successfully",
+            "filename": safe_filename
+        }
+    except Exception as e:
+        print(f"Error in upload_file: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(
@@ -191,10 +248,13 @@ async def websocket_endpoint(
     is_audio: str = Query(...),
 ):
     """Client websocket endpoint"""
-
+    print(f"New WebSocket connection request for session {session_id}")
+    
     # Wait for client connection
     await websocket.accept()
+    websocket_connections[session_id] = websocket
     print(f"Client #{session_id} connected, audio mode: {is_audio}")
+    print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
 
     # Start agent session
     live_events, live_request_queue = start_agent_session(
@@ -208,7 +268,15 @@ async def websocket_endpoint(
     client_to_agent_task = asyncio.create_task(
         client_to_agent_messaging(websocket, live_request_queue)
     )
-    await asyncio.gather(agent_to_client_task, client_to_agent_task)
-
-    # Disconnected
-    print(f"Client #{session_id} disconnected")
+    
+    try:
+        await asyncio.gather(agent_to_client_task, client_to_agent_task)
+    except Exception as e:
+        print(f"WebSocket error for session {session_id}: {e}")
+    finally:
+        # Remove the connection when it's closed
+        if session_id in websocket_connections:
+            del websocket_connections[session_id]
+            print(f"WebSocket connection removed for session {session_id}")
+            print(f"Remaining WebSocket connections: {list(websocket_connections.keys())}")
+        print(f"Client #{session_id} disconnected")
