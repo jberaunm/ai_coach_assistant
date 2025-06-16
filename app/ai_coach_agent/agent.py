@@ -11,6 +11,7 @@ api_key = os.getenv("MISTRAL_API_KEY")
 
 # from google.adk.tools import google_search  # Import the search tool
 from .tools import (
+    chromaDB_tools,
     create_event,
     delete_event,
     edit_event,
@@ -18,7 +19,8 @@ from .tools import (
     list_events,
     list_activities,
     get_weather_forecast,
-    read_training_plan
+    read_training_plan,
+    write_chromaDB
 )
 
 planner_agent = LlmAgent(
@@ -30,14 +32,16 @@ planner_agent = LlmAgent(
     ),
     instruction="""
     You are a planner agent, you understand the training plan given by the user and parse it. You will use the tool `read_training_plan` to access the content.
-                 
+    Once plan is parsed, you will insert the data into the ChromaDB using the tool `write_ChromaDB`
+
     ## Parsing instructions
     When you receive file, analyze it and extract the following information:
-       - `Date`: date of the session planned
-       - `Day`: day of the week
-       - `Type`: type of session, including `Easy Run`, `Long Run`, `Speed Session`, `Hill Session`, `Tempo` or `Rest` when no session is planned
-       - `Distance`: distance in kilometres of the session
-       - `Notes`: additional instructions of the session including pace in min/km (velocity), segments (warm up, cool down, 3k, 2k, jogging, walking)
+       - `date`: date of the session planned
+       - `day`: day of the week
+       - `type`: type of session, including `Easy Run`, `Long Run`, `Speed Session`, `Hill Session`, `Tempo` or `Rest` when no session is planned
+       - `distance`: distance in kilometres of the session
+       - `notes`: additional instructions of the session including pace in min/km (velocity), segments (warm up, cool down, 3k, 2k, jogging, walking)
+    This information will be used to insert data to the DataBase using the tool `write_chromaDB`
 
     ## Response format
     After processing the content, respond with:
@@ -62,7 +66,7 @@ planner_agent = LlmAgent(
     2. Suggest what might be wrong
     3. Ask for clarification if needed
     """,
-    tools=[read_training_plan],
+    tools=[read_training_plan,write_chromaDB],
 )
 
 scheduler_agent = LlmAgent(
