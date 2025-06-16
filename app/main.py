@@ -28,11 +28,11 @@ APP_NAME = "ADK Streaming example"
 session_service = InMemorySessionService()
 
 
-def start_agent_session(session_id, is_audio=False):
+async def start_agent_session(session_id, is_audio=False):
     """Starts an agent session"""
 
     # Create a Session
-    session = session_service.create_session(
+    session = await session_service.create_session(
         app_name=APP_NAME,
         user_id=session_id,
         session_id=session_id,
@@ -68,20 +68,24 @@ def start_agent_session(session_id, is_audio=False):
     # Create a LiveRequestQueue for this session
     live_request_queue = LiveRequestQueue()
 
-    # Start agent session
-    live_events = runner.run_live(
-        session=session,
-        live_request_queue=live_request_queue,
-        run_config=run_config,
-    )
-    return live_events, live_request_queue
+    try:
+        # Start agent session - don't await since it returns an async generator
+        live_events = runner.run_live(
+            session=session,
+            live_request_queue=live_request_queue,
+            run_config=run_config,
+        )
+        return live_events, live_request_queue
+    except Exception as e:
+        print(f"Error starting agent session: {e}")
+        raise
 
 
 async def agent_to_client_messaging(
     websocket: WebSocket, live_events: AsyncIterable[Event | None]
 ):
     """Agent to client communication"""
-    while True:
+    try:
         async for event in live_events:
             if event is None:
                 continue
@@ -132,6 +136,9 @@ async def agent_to_client_messaging(
                     }
                     await websocket.send_text(json.dumps(message))
                     print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
+    except Exception as e:
+        print(f"Error in agent_to_client_messaging: {e}")
+        raise
 
 
 async def client_to_agent_messaging(
@@ -210,20 +217,23 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
         # Send a message through WebSocket
         if session_id in websocket_connections:
             print(f"Sending WebSocket message to session {session_id}")
-            # Send the acknowledgment message
+            
+            # Create a message to send to the agent
             message = {
                 "mime_type": "text/plain",
-                "data": f"I've received your file '{safe_filename}'. I'll analyze it and get back to you shortly.",
-                "role": "model"
+                "data": f"can you parse my training plan? this is the file path: {file_path}",
+                "role": "user"
             }
-            await websocket_connections[session_id].send_text(json.dumps(message))
             
-            # Send turn_complete to ensure proper message separation
-            turn_complete = {
-                "turn_complete": True,
-                "interrupted": None
-            }
-            await websocket_connections[session_id].send_text(json.dumps(turn_complete))
+            # Get the live_request_queue for this session
+            websocket = websocket_connections[session_id]
+            if hasattr(websocket, 'live_request_queue'):
+                # Send the message through the live_request_queue
+                content = types.Content(role="user", parts=[types.Part.from_text(text=message["data"])])
+                websocket.live_request_queue.send_content(content=content)
+                print(f"Message sent to agent through live_request_queue: {message['data']}")
+            else:
+                print(f"No live_request_queue found for session {session_id}")
             
             print(f"WebSocket message sent successfully to session {session_id}")
         else:
@@ -256,23 +266,28 @@ async def websocket_endpoint(
     print(f"Client #{session_id} connected, audio mode: {is_audio}")
     print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
 
-    # Start agent session
-    live_events, live_request_queue = start_agent_session(
-        session_id, is_audio == "true"
-    )
-
-    # Start tasks
-    agent_to_client_task = asyncio.create_task(
-        agent_to_client_messaging(websocket, live_events)
-    )
-    client_to_agent_task = asyncio.create_task(
-        client_to_agent_messaging(websocket, live_request_queue)
-    )
-    
     try:
+        # Start agent session
+        live_events, live_request_queue = await start_agent_session(
+            session_id, is_audio == "true"
+        )
+
+        # Store live_request_queue with the WebSocket connection
+        websocket.live_request_queue = live_request_queue
+
+        # Start tasks
+        agent_to_client_task = asyncio.create_task(
+            agent_to_client_messaging(websocket, live_events)
+        )
+        client_to_agent_task = asyncio.create_task(
+            client_to_agent_messaging(websocket, live_request_queue)
+        )
+        
+        # Wait for both tasks to complete
         await asyncio.gather(agent_to_client_task, client_to_agent_task)
     except Exception as e:
         print(f"WebSocket error for session {session_id}: {e}")
+        raise  # Re-raise the exception to ensure proper error handling
     finally:
         # Remove the connection when it's closed
         if session_id in websocket_connections:
