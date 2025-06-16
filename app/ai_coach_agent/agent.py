@@ -17,7 +17,52 @@ from .tools import (
     get_current_time,
     list_events,
     list_activities,
-    get_weather_forecast
+    get_weather_forecast,
+    read_training_plan
+)
+
+planner_agent = LlmAgent(
+    name="planner_agent",
+    #model="gemini-2.0-flash-exp",
+    model=LiteLlm(model="mistral/mistral-small-latest"),
+    description=(
+        "Agent that parses marathon training plans, and adjusts if a seesion is missed."
+    ),
+    instruction="""
+    You are a planner agent, you understand the training plan given by the user and parse it. You will use the tool `read_training_plan` to access the content.
+                 
+    ## Parsing instructions
+    When you receive file, analyze it and extract the following information:
+       - `Date`: date of the session planned
+       - `Day`: day of the week
+       - `Type`: type of session, including `Easy Run`, `Long Run`, `Speed Session`, `Hill Session`, `Tempo` or `Rest` when no session is planned
+       - `Distance`: distance in kilometres of the session
+       - `Notes`: additional instructions of the session including pace in min/km (velocity), segments (warm up, cool down, 3k, 2k, jogging, walking)
+
+    ## Response format
+    After processing the content, respond with:
+    1. A confirmation that the content was processed
+    2. A summary of the training plan (number of sessions, date range)
+    3. A structured list of the sessions you found
+
+    For example:
+    "I've processed your training plan. It contains 12 sessions from June 15 to June 30, 2025. The plan includes 3 long runs, 4 easy runs, 2 speed sessions, and 3 rest days.
+
+    Here are the sessions I found:
+    1. June 15, 2025 (Sunday) - Long Run
+       - Distance: 15km
+       - Notes: Easy pace (5:30 min/km), include 10min warm-up and cool-down
+
+    2. June 16, 2025 (Monday) - Rest
+       - Notes: Complete rest day"
+
+    ## Error handling
+    If you encounter any issues:
+    1. Report the specific error
+    2. Suggest what might be wrong
+    3. Ask for clarification if needed
+    """,
+    tools=[read_training_plan],
 )
 
 scheduler_agent = LlmAgent(
@@ -84,7 +129,7 @@ root_agent = Agent(
     description="Agent to help with scheduling and calendar operations.",
     instruction=f"""
     You are an AI coach assistant, a helpful assistant that can perform various tasks 
-    helping with scheduling and calendar operations, Strava operations and weather forecast.
+    helping with scheduling and calendar operations, Strava operations, weather forecast and Training Plan Operations.
     
     ## Calendar operations
     You can perform calendar operations directly routing to the scheduler_agent
@@ -94,6 +139,10 @@ root_agent = Agent(
 
     ## Strava operations
     You can perform Strava operations through routing to the strava_agent
+
+    ## Training Plan Operations
+    When a user upload their training plan, the files needs to be parsed doing the following:
+    1. Immediately delegate to the planner_agent including the file path
     
     ## Be proactive and conversational
     Be proactive when handling calendar requests. Don't ask unnecessary questions when the context or defaults make sense.
@@ -122,5 +171,6 @@ root_agent = Agent(
     tools=[
         AgentTool(agent=scheduler_agent),
         AgentTool(agent=strava_agent),
+        AgentTool(agent=planner_agent),
     ]
 )

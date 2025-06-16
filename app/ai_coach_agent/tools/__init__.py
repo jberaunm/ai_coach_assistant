@@ -11,6 +11,7 @@ from .edit_event import edit_event
 from .list_events import list_events
 from .strava_tools3 import list_activities
 from .get_weather import get_weather_forecast
+from .training_plan_parser import read_training_plan
 
 __all__ = [
     "create_event",
@@ -19,5 +20,6 @@ __all__ = [
     "list_events",
     "get_current_time",
     "list_activities",
-    "get_weather_forecast"
+    "get_weather_forecast",
+    "read_training_plan"
 ]
