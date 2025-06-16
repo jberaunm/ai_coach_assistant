@@ -16,6 +16,7 @@ from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from ai_coach_agent.agent import root_agent
+from db.chroma_service import chroma_service
 
 #
 # ADK Streaming
@@ -295,3 +296,15 @@ async def websocket_endpoint(
             print(f"WebSocket connection removed for session {session_id}")
             print(f"Remaining WebSocket connections: {list(websocket_connections.keys())}")
         print(f"Client #{session_id} disconnected")
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """List all sessions stored in ChromaDB."""
+    try:
+        result = chroma_service.list_all_sessions()
+        return result
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error listing sessions: {str(e)}"
+        }
