@@ -58,3 +58,15 @@ def write_chromaDB(sessions: List[Dict[str, Any]]):
             "message": f"Error storing sessions: {str(e)}",
             "plan_id": None
         }
+
+def get_session_by_date(date: str):
+    """
+    Retrieves today's training session from the database.
+    Returns:
+        dict: The session for today in YYYY-MM-DD format, or a message if none found.
+    """
+    session = chroma_service.get_session_by_date(date)
+    if session:
+        return {"session": session}
+    else:
+        return {"session": "No session found for today."}
