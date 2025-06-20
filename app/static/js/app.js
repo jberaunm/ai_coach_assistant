@@ -230,7 +230,7 @@ import { startAudioRecorderWorklet } from "./audio-recorder.js";
 import { initializeFileUpload } from "./file-upload.js";
 
 // Initialize file upload when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Wait for WebSocket connection before initializing file upload
     const checkWebSocket = setInterval(() => {
         if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -238,6 +238,17 @@ document.addEventListener('DOMContentLoaded', () => {
             initializeFileUpload(websocket);
         }
     }, 100);
+
+    try {
+      const res = await fetch('/api/training-plan-exists');
+      const data = await res.json();
+      if (data.exists) {
+        const statusDiv = document.getElementById('training-plan-status');
+        if (statusDiv) statusDiv.style.display = 'flex';
+      }
+    } catch (e) {
+      console.error('Could not check training plan status', e);
+    }
 });
 
 // Start audio
@@ -347,3 +358,25 @@ function arrayBufferToBase64(buffer) {
   }
   return window.btoa(binary);
 }
+
+async function updateTodaysSession() {
+  try {
+    const res = await fetch('/api/todays-session');
+    if (!res.ok) throw new Error('No session found');
+    const data = await res.json();
+    const todaysPlanElem = document.getElementById('todays-plan');
+    if (todaysPlanElem) {
+      const type = data.metadata.type;
+      const distance = data.metadata.distance;
+      todaysPlanElem.textContent = `${type} ${distance}k`;
+    }
+  } catch (e) {
+    const todaysPlanElem = document.getElementById('todays-plan');
+    if (todaysPlanElem) {
+      todaysPlanElem.textContent = 'No session planned for today';
+    }
+  }
+}
+
+// Call this on page load
+document.addEventListener('DOMContentLoaded', updateTodaysSession);

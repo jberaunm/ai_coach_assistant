@@ -4,9 +4,10 @@ import json
 import os
 from pathlib import Path
 from typing import AsyncIterable
+from datetime import datetime
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, WebSocket, UploadFile, File
+from fastapi import FastAPI, Query, WebSocket, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from google.adk.agents import LiveRequestQueue
@@ -308,3 +309,24 @@ async def list_sessions():
             "status": "error",
             "message": f"Error listing sessions: {str(e)}"
         }
+
+@app.get("/api/training-plan-exists")
+async def training_plan_exists():
+    """Check if any file exists in uploads."""
+    exists = any(UPLOAD_DIR.iterdir())
+    return {"exists": exists}
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(STATIC_DIR / "favicon.ico")
+
+@app.get("/api/todays-session")
+async def get_todays_session():
+    today = datetime.now().strftime("%Y-%m-%d")
+    result = chroma_service.get_session_by_date(today)
+    if not result or not result.get('documents') or not result['documents']:
+        raise HTTPException(status_code=404, detail="No session found for today")
+    return {
+        "session": result['documents'][0],
+        "metadata": result['metadatas'][0]
+    }

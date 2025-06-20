@@ -157,14 +157,11 @@ class ChromaService:
         except Exception as e:
             print(f"Error retrieving training plan: {str(e)}")
             return None
-    
-    def get_todays_sessions(self) -> List[Dict]:
-        """Get sessions scheduled for today."""
+        
+    def get_session_by_date(self,date: str) -> List[Dict]:
+        """Get sessions from a specific date IN THE FORMAT YYYY-MM-DD"""
         try:
-            today = datetime.now().strftime("%Y-%m-%d")
-            results = self.collection.query(
-                where={"date": today}
-            )
+            results = self.collection.get(where={"date": date})
             return results
         except Exception as e:
             print(f"Error retrieving today's sessions: {str(e)}")

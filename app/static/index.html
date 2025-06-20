@@ -377,6 +377,21 @@
         background-color: var(--gray-light);
         transform: scale(1.05);
       }
+
+      #training-plan-status {
+        margin: 10px;
+        color: var(--secondary-color);
+        font-weight: 500;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center; /* This centers the content horizontally */
+        width: 100%;  
+      }
+
+      #uploaded-icon {
+        margin-right: 6px;
+      }
     </style>
   </head>
 
@@ -388,7 +403,7 @@
     <div class="stats-container">
       <div class="stat-card">
         <h1>Today's plan</h1>
-        <h3 class="stat-value">Hil Session 10k</h3>
+        <h3 class="stat-value" id="todays-plan">Loading...</h3>
         <h3 class="stat-value">  - 7AM 10 °C</h3>
         <h3 class="stat-value">  - 12PM 22 °C</h3>
         <h3 class="stat-value">Estimated time: 45 mins</h3>
@@ -405,6 +420,13 @@
         <div class="drop-zone">
           <p>Drag and drop files here or click to upload</p>
           <input type="file" id="fileUpload" hidden />
+        </div>
+        <div id="training-plan-status" style="display:none; align-items:center; gap:8px;">
+          <svg id="uploaded-icon" width="24" height="24" fill="none" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="12" fill="#34A853"/>
+            <path d="M7 13l3 3 7-7" stroke="#fff" stroke-width="2" fill="none"/>
+          </svg>
+          <span>Training plan uploaded and processed</span>
         </div>
       </div>
       <div class="stat-card">
