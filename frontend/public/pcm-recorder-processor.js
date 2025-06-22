@@ -15,4 +15,4 @@ class PCMProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("pcm-recorder-processor", PCMProcessor);
+registerProcessor("pcm-recorder-processor", PCMProcessor); 
