@@ -68,6 +68,7 @@ def list_events(
             service.events()
             .list(
                 calendarId=calendar_id,
+                eventTypes="default",
                 timeMin=time_min,
                 timeMax=time_max,
                 maxResults=max_results,
@@ -95,13 +96,8 @@ def list_events(
                 "start": format_event_time(event.get("start", {})),
                 "end": format_event_time(event.get("end", {})),
                 "location": event.get("location", ""),
-                "description": event.get("description", ""),
-                "attendees": [
-                    attendee.get("email")
-                    for attendee in event.get("attendees", [])
-                    if "email" in attendee
-                ],
-                "link": event.get("htmlLink", ""),
+                #"description": event.get("description", ""),
+                #"link": event.get("htmlLink", ""),
             }
             formatted_events.append(formatted_event)
 

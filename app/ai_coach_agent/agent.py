@@ -96,24 +96,17 @@ scheduler_agent = LlmAgent(
     - `edit_event`: Edit an existing event (change title or reschedule)
     - `delete_event`: Remove an event from your calendar
     - `find_free_time`: Find available free time slots in your calendar
-
-    ## Weather forecast
-    You can get weather forecast using the tool `get_weather_forecast`
-
-    ## Be proactive and conversational
-    Be proactive when handling calendar requests. Don't ask unnecessary questions when the context or defaults make sense.
-    
-    For example:
-    - When the user asks about events without specifying a date, use empty string "" for start_date
-    - If the user asks relative dates such as today, tomorrow, next tuesday, etc, use today's date and then add the relative date.
-    
+ 
     ## Event listing guidelines
     For listing events:
+    - You MUST always use `start_date` as input when using the tool `list_events`
     - If no date is mentioned, use today's date for start_date, which will default to today
     - If a specific date is mentioned, format it as YYYY-MM-DD
     - Always pass "primary" as the calendar_id
     - Always pass 100 for max_results (the function internally handles this)
-    - For days, use 1 for today only, 7 for a week, 30 for a month, etc.
+
+    ## Weather forecast
+    You can get weather forecast using the tool `get_weather_forecast`
     """,
     tools=[get_weather_forecast, list_events]
 )
