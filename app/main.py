@@ -4,10 +4,11 @@ import json
 import os
 from pathlib import Path
 from typing import AsyncIterable
+from datetime import datetime
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, WebSocket
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Query, WebSocket, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from google.adk.agents import LiveRequestQueue
 from google.adk.agents.run_config import RunConfig
@@ -16,6 +17,7 @@ from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from ai_coach_agent.agent import root_agent
+from db.chroma_service import chroma_service
 
 #
 # ADK Streaming
@@ -28,11 +30,11 @@ APP_NAME = "ADK Streaming example"
 session_service = InMemorySessionService()
 
 
-def start_agent_session(session_id, is_audio=False):
+async def start_agent_session(session_id, is_audio=False):
     """Starts an agent session"""
 
     # Create a Session
-    session = session_service.create_session(
+    session = await session_service.create_session(
         app_name=APP_NAME,
         user_id=session_id,
         session_id=session_id,
@@ -68,20 +70,24 @@ def start_agent_session(session_id, is_audio=False):
     # Create a LiveRequestQueue for this session
     live_request_queue = LiveRequestQueue()
 
-    # Start agent session
-    live_events = runner.run_live(
-        session=session,
-        live_request_queue=live_request_queue,
-        run_config=run_config,
-    )
-    return live_events, live_request_queue
+    try:
+        # Start agent session - don't await since it returns an async generator
+        live_events = runner.run_live(
+            session=session,
+            live_request_queue=live_request_queue,
+            run_config=run_config,
+        )
+        return live_events, live_request_queue
+    except Exception as e:
+        print(f"Error starting agent session: {e}")
+        raise
 
 
 async def agent_to_client_messaging(
     websocket: WebSocket, live_events: AsyncIterable[Event | None]
 ):
     """Agent to client communication"""
-    while True:
+    try:
         async for event in live_events:
             if event is None:
                 continue
@@ -132,6 +138,9 @@ async def agent_to_client_messaging(
                     }
                     await websocket.send_text(json.dumps(message))
                     print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
+    except Exception as e:
+        print(f"Error in agent_to_client_messaging: {e}")
+        raise
 
 
 async def client_to_agent_messaging(
@@ -174,15 +183,75 @@ async def client_to_agent_messaging(
 
 app = FastAPI()
 
-STATIC_DIR = Path("static")
+# Get the absolute path to the app directory
+APP_DIR = Path(__file__).parent
+STATIC_DIR = APP_DIR / "static"
+UPLOAD_DIR = APP_DIR / "uploads"
+
+# Store active WebSocket connections
+websocket_connections = {}
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-@app.get("/")
-async def root():
+@app.get("/", response_class=HTMLResponse)
+async def get():
     """Serves the index.html"""
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(STATIC_DIR / "index.html")
 
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)):
+    try:
+        print(f"Received file upload request for session {session_id}")
+        print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
+        
+        # Create a safe filename
+        safe_filename = file.filename.replace(" ", "_")
+        file_path = UPLOAD_DIR / safe_filename
+        
+        # Save the file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Send a message through WebSocket
+        if session_id in websocket_connections:
+            print(f"Sending WebSocket message to session {session_id}")
+            
+            # Create a message to send to the agent
+            message = {
+                "mime_type": "text/plain",
+                "data": f"can you parse my training plan? this is the file path: {file_path}",
+                "role": "user"
+            }
+            
+            # Get the live_request_queue for this session
+            websocket = websocket_connections[session_id]
+            if hasattr(websocket, 'live_request_queue'):
+                # Send the message through the live_request_queue
+                content = types.Content(role="user", parts=[types.Part.from_text(text=message["data"])])
+                websocket.live_request_queue.send_content(content=content)
+                print(f"Message sent to agent through live_request_queue: {message['data']}")
+            else:
+                print(f"No live_request_queue found for session {session_id}")
+            
+            print(f"WebSocket message sent successfully to session {session_id}")
+        else:
+            print(f"No WebSocket connection found for session {session_id}")
+        
+        return {
+            "status": "success",
+            "message": "File uploaded successfully",
+            "filename": safe_filename
+        }
+    except Exception as e:
+        print(f"Error in upload_file: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(
@@ -191,24 +260,73 @@ async def websocket_endpoint(
     is_audio: str = Query(...),
 ):
     """Client websocket endpoint"""
-
+    print(f"New WebSocket connection request for session {session_id}")
+    
     # Wait for client connection
     await websocket.accept()
+    websocket_connections[session_id] = websocket
     print(f"Client #{session_id} connected, audio mode: {is_audio}")
+    print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
 
-    # Start agent session
-    live_events, live_request_queue = start_agent_session(
-        session_id, is_audio == "true"
-    )
+    try:
+        # Start agent session
+        live_events, live_request_queue = await start_agent_session(
+            session_id, is_audio == "true"
+        )
 
-    # Start tasks
-    agent_to_client_task = asyncio.create_task(
-        agent_to_client_messaging(websocket, live_events)
-    )
-    client_to_agent_task = asyncio.create_task(
-        client_to_agent_messaging(websocket, live_request_queue)
-    )
-    await asyncio.gather(agent_to_client_task, client_to_agent_task)
+        # Store live_request_queue with the WebSocket connection
+        websocket.live_request_queue = live_request_queue
 
-    # Disconnected
-    print(f"Client #{session_id} disconnected")
+        # Start tasks
+        agent_to_client_task = asyncio.create_task(
+            agent_to_client_messaging(websocket, live_events)
+        )
+        client_to_agent_task = asyncio.create_task(
+            client_to_agent_messaging(websocket, live_request_queue)
+        )
+        
+        # Wait for both tasks to complete
+        await asyncio.gather(agent_to_client_task, client_to_agent_task)
+    except Exception as e:
+        print(f"WebSocket error for session {session_id}: {e}")
+        raise  # Re-raise the exception to ensure proper error handling
+    finally:
+        # Remove the connection when it's closed
+        if session_id in websocket_connections:
+            del websocket_connections[session_id]
+            print(f"WebSocket connection removed for session {session_id}")
+            print(f"Remaining WebSocket connections: {list(websocket_connections.keys())}")
+        print(f"Client #{session_id} disconnected")
+
+@app.get("/api/sessions")
+async def list_sessions():
+    """List all sessions stored in ChromaDB."""
+    try:
+        result = chroma_service.list_all_sessions()
+        return result
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error listing sessions: {str(e)}"
+        }
+
+@app.get("/api/training-plan-exists")
+async def training_plan_exists():
+    """Check if any file exists in uploads."""
+    exists = any(UPLOAD_DIR.iterdir())
+    return {"exists": exists}
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(STATIC_DIR / "favicon.ico")
+
+@app.get("/api/todays-session")
+async def get_todays_session():
+    today = datetime.now().strftime("%Y-%m-%d")
+    result = chroma_service.get_session_by_date(today)
+    if not result or not result.get('documents') or not result['documents']:
+        raise HTTPException(status_code=404, detail="No session found for today")
+    return {
+        "session": result['documents'][0],
+        "metadata": result['metadatas'][0]
+    }
