@@ -18,6 +18,7 @@ from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from ai_coach_agent.agent import root_agent
 from db.chroma_service import chroma_service
+from fastapi.middleware.cors import CORSMiddleware
 
 #
 # ADK Streaming
@@ -183,23 +184,42 @@ async def client_to_agent_messaging(
 
 app = FastAPI()
 
+# Allow CORS for frontend dev server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Get the absolute path to the app directory
 APP_DIR = Path(__file__).parent
-STATIC_DIR = APP_DIR / "static"
+# STATIC_DIR = APP_DIR / "static"   # Removed
 UPLOAD_DIR = APP_DIR / "uploads"
 
 # Store active WebSocket connections
 websocket_connections = {}
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")  # Removed
 
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-@app.get("/", response_class=HTMLResponse)
-async def get():
-    """Serves the index.html"""
-    return FileResponse(STATIC_DIR / "index.html")
+# --- Removed old root and favicon routes ---
+# @app.get("/", response_class=HTMLResponse)
+# async def get():
+#     """Serves the index.html"""
+#     return FileResponse(STATIC_DIR / "index.html")
+
+# @app.get("/favicon.ico")
+# async def favicon():
+#     return FileResponse(STATIC_DIR / "favicon.ico")
+
+# --- Add a simple health check root route ---
+@app.get("/")
+async def root():
+    return {"status": "ok"}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)):

@@ -30,8 +30,8 @@ from .tools import (
 
 planner_agent = LlmAgent(
     name="planner_agent",
-    model="gemini-2.0-flash-exp",
-    #model=LiteLlm(model="mistral/mistral-small-latest"),
+    #model="gemini-2.0-flash-exp",
+    model=LiteLlm(model="mistral/mistral-small-latest"),
     description=(
         "Agent that parses marathon training plans, and adjusts if a seesion is missed."
     ),
