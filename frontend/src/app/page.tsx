@@ -3,11 +3,18 @@ import React, { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import ChatAssistant from "./components/ChatAssistant";
 import FileUpload from "./components/FileUpload";
+import DayOverviewCard from "./components/DayOverviewCard";
+import EventsCalendar from "./components/EventsCalendar";
+import WeatherForecast from "./components/WeatherForecast";
+import WeeklyStats from "./components/WeeklyStats";
+import AgentFlowDiagram from "./components/AgentFlowDiagram";
+import AgentFlowDiagramReactFlow from "./components/AgentFlowDiagramReactFlow";
 
 export default function Home() {
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
   const sessionId = useRef(Math.random().toString().substring(10));
   const [todaysPlan, setTodaysPlan] = useState<string>("Loading...");
+  const [sharedDate, setSharedDate] = useState(new Date());
 
   useEffect(() => {
     const ws = new WebSocket(`ws://localhost:8000/ws/${sessionId.current}?is_audio=false`);
@@ -38,35 +45,106 @@ export default function Home() {
 
   return (
     <>
-      <header>
-        <h1>AI Coach Running Assistant</h1>
+      <header style={{ display: "flex", justifyContent: "space-between", padding: "2px 14px", alignItems: "center" }}>
+        <Image 
+          src="/runningAI_logo.png" 
+          alt="Running AI Logo" 
+          width={120} 
+          height={25} 
+          priority
+        />
+        <nav style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <button 
+            style={{ 
+              background: "none", 
+              border: "none", 
+              cursor: "pointer", 
+              padding: "8px",
+              borderRadius: "8px",
+              transition: "background-color 0.2s ease"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f0f0f0"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+            title="Notifications"
+          >
+            <Image 
+              src="/notification.png" 
+              alt="Notifications" 
+              width={20} 
+              height={20} 
+            />
+          </button>
+          <button 
+            style={{ 
+              background: "none", 
+              border: "none", 
+              cursor: "pointer", 
+              padding: "8px",
+              borderRadius: "8px",
+              transition: "background-color 0.2s ease"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f0f0f0"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+            title="Settings"
+          >
+            <Image 
+              src="/settings.png" 
+              alt="Settings" 
+              width={20} 
+              height={20} 
+            />
+          </button>
+          <button 
+            style={{ 
+              background: "none", 
+              border: "none", 
+              cursor: "pointer", 
+              padding: "8px",
+              borderRadius: "8px",
+              transition: "background-color 0.2s ease"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f0f0f0"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+            title="User Profile"
+          >
+            <Image 
+              src="/profile.png" 
+              alt="User Profile" 
+              width={20} 
+              height={20} 
+            />
+          </button>
+        </nav>
       </header>
-      <div className="stats-container">
-        <div className="stat-card">
-          <h1>Today's plan</h1>
-          <h3 className="stat-value" id="todays-plan">{todaysPlan}</h3>
-          <h3 className="stat-value">  - 7AM 10 °C</h3>
-          <h3 className="stat-value">  - 12PM 22 °C</h3>
+      <div className="dashboard-layout">
+        <div className="main-stats-container">
+          <DayOverviewCard date={sharedDate} onDateChange={setSharedDate} />
+          <WeatherForecast date={sharedDate} />
+          <EventsCalendar date={sharedDate} />
         </div>
-        <div className="stat-card">
-          <h3>Weekly Average</h3>
-          <p className="stat-value">45 min</p>
-        </div>
-      </div>
-      <div className="stats-container">
-        <div className="stat-card">
-          <h1>Training plan</h1>
-          <FileUpload websocket={websocket} />
-          <div id="training-plan-status" style={{display: "none", alignItems: "center", gap: "8px"}}>
-            <svg id="uploaded-icon" width="24" height="24" fill="none" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="12" fill="#34A853" />
-              <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2" fill="none" />
-            </svg>
-            <span>Training plan uploaded and processed</span>
+        <div className="side-containers">
+          <WeeklyStats date={sharedDate} />
+          <div className="stat-card">
+            <h1>Training plan</h1>
+            <FileUpload websocket={websocket} />
+            <div id="training-plan-status" style={{display: "none", alignItems: "center", gap: "8px"}}>
+              <svg id="uploaded-icon" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="12" fill="#34A853" />
+                <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2" fill="none" />
+              </svg>
+              <span>Training plan uploaded and processed</span>
+            </div>
           </div>
         </div>
-        <div className="stat-card">
-          <ChatAssistant websocket={websocket} />
+        <div className="third-column">
+          <div className="stat-card">
+            <h1 style={{ marginBottom: 12 }}>Chat Interaction</h1>
+            <ChatAssistant websocket={websocket} />
+          </div>
+          <div className="stat-card agent-flow-card">
+            <h1 style={{ marginBottom: 12 }}>AI Agent Flow</h1>
+            <AgentFlowDiagramReactFlow />
+          </div>
         </div>
       </div>
     </>
