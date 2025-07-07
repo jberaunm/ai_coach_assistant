@@ -64,9 +64,6 @@ planner_agent = LlmAgent(
     "I've processed your training plan. It contains 12 sessions from June 15 to June 30, 2025.
     The plan includes 3 long runs, 4 easy runs, 2 speed sessions, and 3 rest days.
 
-    ## Session Query operations 
-    To provide session information for an specific date, use the tool `get_session_by_date`, which expects the argument `date` in YYYY-MM-DD format.
-
     ## Error handling
     If you encounter any issues:
     1. Report the specific error
@@ -81,9 +78,8 @@ scheduler_agent = LlmAgent(
     model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
     description="Schedules the ideal time for today's run.",
     instruction=f"""
-    
     You are a scheduler agent, a helpful assistant that can peform various tasks
-    helping with scheduling and calendar operations and weather forecast.
+    helping with calendar operations, weather forecast and scheduling training sessions
 
     ## Today's date
     Today's date is {get_current_time()}.
@@ -105,8 +101,56 @@ scheduler_agent = LlmAgent(
     - Always pass "primary" as the calendar_id
     - Always pass 100 for max_results (the function internally handles this)
 
+    ## Calendar response format
+    When the `list_events` tool returns calendar data, it will be in this structured format:
+    ```json
+    {{
+        "status": "success",
+        "message": "Found X event(s).",
+        "calendar": {{
+            "events": [
+                {{"title": "Meeting 1", "start": "10:00", "end": "11:00"}},
+                {{"title": "Meeting 2", "start": "11:00", "end": "12:00"}},
+                {{"title": "Meeting 3", "start": "16:00", "end": "17:00"}}
+            ]
+        }}
+    }}
+    ```
+    
+    When presenting calendar events to users, ALWAYS use this exact format:
+    - Use the "title" field for event names
+    - Use the "start" and "end" fields for times (in HH:MM format)
+    - Present events in chronological order
+    - Format your response like: "Your calendar shows: [Event Title] from [start] to [end]"
+
     ## Weather forecast
-    You can get weather forecast using the tool `get_weather_forecast`
+    For weather information:
+    - You can get weather forecast using the tool `get_weather_forecast`, always include the date as part of the input
+    - You MUST always use `date` as input when using the tool `get_weather_forecast`
+    - If no date is mentioned, use today's date for start_date, which will default to today
+    - If a specific date is mentioned, format it as YYYY-MM-DD
+    - Response format: 1. Current weather information and 2. Next hourly weather forecast for the particular day
+
+    ## Scheduling training sessions
+    You can find a convenient time for the user to train, based on weather conditions and calendar availability.
+    When the user asks about the training session from an specific date, you MUST:
+    - Retrieve training session for that particular date using the tool `get_session_by_date`
+    - Retrieve calendar events for that particular date
+    - Retrieve current and weather forecast conditions for that particular date
+    - With all information above, you will suggest a time of the date to schedule the training session
+    
+    ## Response format for scheduling
+    After finding the best time, you MUST include the following list as part of you response:
+    1. Present calendar events in the structured format: "Your calendar shows: [Event Title] from [start] to [end]"
+    2. The time suggested for the training session, including the weather forecast.
+    
+    ## Example response
+    "Your calendar shows:
+    - Meeting 1 from 10:00 to 11:00
+    - Meeting 2 from 15:00 to 17:00
+    
+    I suggest you schedule your 'Easy Run' at 12:00, as it will be Cloudy with 8°C."
+
     """,
     tools=[get_weather_forecast, list_events]
 )
@@ -150,7 +194,7 @@ root_agent = Agent(
 
     ## Training Plan Operations
     When a user upload their training plan, inmediately delegate to the `planner_agent` including the file path
-    If you are asked about an specific session planed for either today or other days, delegate to the `planner_agent`.
+    If you are asked about an specific session planed for either today or other days, delegate to the `scheduler_agent`.
     
     ## Be proactive and conversational
     Be proactive when handling calendar requests. Don't ask unnecessary questions when the context or defaults make sense.

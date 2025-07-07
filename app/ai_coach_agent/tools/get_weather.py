@@ -20,8 +20,8 @@ def get_weather_forecast() -> list:
         time = hour.findtext("time")
         temp = hour.findtext("tempC")
         condition = hour.findtext("weatherDesc")
-        icon = hour.findtext("weatherIconUrl")
-        uv = hour.findtext("uvIndex")
+        #icon = hour.findtext("weatherIconUrl")
+        #uv = hour.findtext("uvIndex")
 
         forecast.append({
             "time": f"{int(time)//100:02d}:00",  # Convert "1200" → "12:00"

@@ -19,7 +19,17 @@ def list_events(
         days (int): Number of days to look ahead. Use 1 for today only, 7 for a week, 30 for a month, etc.
 
     Returns:
-        dict: Information about upcoming events or error details
+        dict: Information about upcoming events in structured format:
+        {
+            "status": "success",
+            "message": "Found X event(s).",
+            "calendar": {
+                "events": [
+                    {"title": "Event Title", "start": "10:00", "end": "11:00"},
+                    ...
+                ]
+            }
+        }
     """
     try:
         print("Listing events")
@@ -42,22 +52,34 @@ def list_events(
 
         # Set time range
         if not start_date or start_date.strip() == "":
+            # If no start_date provided, use current time and look ahead by days
             start_time = datetime.datetime.utcnow()
+            # If days is not provided or is invalid, default to 1 day
+            if not days or days < 1:
+                days = 1
+            end_time = start_time + datetime.timedelta(days=days)
         else:
             try:
-                start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                # Parse the provided start_date
+                requested_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+                current_date = datetime.datetime.utcnow().date()
+                
+                if requested_date == current_date:
+                    # If the requested date is today, use current time as start_time
+                    start_time = datetime.datetime.utcnow()
+                    # Set end_time to the end of today (23:59:59)
+                    end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+                else:
+                    # If the requested date is not today, use 00:00:00 of that specific date
+                    start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                    # Set end_time to the end of that specific day (23:59:59)
+                    end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
             except ValueError:
                 return {
                     "status": "error",
                     "message": f"Invalid date format: {start_date}. Use YYYY-MM-DD format.",
                     "events": [],
                 }
-
-        # If days is not provided or is invalid, default to 1 day
-        if not days or days < 1:
-            days = 1
-
-        end_time = start_time + datetime.timedelta(days=days)
 
         # Format times for API call
         time_min = start_time.isoformat() + "Z"
@@ -90,21 +112,43 @@ def list_events(
         # Format events for display
         formatted_events = []
         for event in events:
+            # Get raw start and end times from the event
+            start_raw = event.get("start", {})
+            end_raw = event.get("end", {})
+            
+            # Extract time in HH:MM format
+            start_time = "00:00"
+            end_time = "00:00"
+            
+            if "dateTime" in start_raw:
+                # This is a datetime event
+                dt = datetime.datetime.fromisoformat(start_raw["dateTime"].replace("Z", "+00:00"))
+                start_time = dt.strftime("%H:%M")
+            elif "date" in start_raw:
+                # This is an all-day event
+                start_time = "00:00"
+                
+            if "dateTime" in end_raw:
+                # This is a datetime event
+                dt = datetime.datetime.fromisoformat(end_raw["dateTime"].replace("Z", "+00:00"))
+                end_time = dt.strftime("%H:%M")
+            elif "date" in end_raw:
+                # This is an all-day event
+                end_time = "23:59"
+            
             formatted_event = {
-                "id": event.get("id"),
-                "summary": event.get("summary", "Untitled Event"),
-                "start": format_event_time(event.get("start", {})),
-                "end": format_event_time(event.get("end", {})),
-                "location": event.get("location", ""),
-                #"description": event.get("description", ""),
-                #"link": event.get("htmlLink", ""),
+                "title": event.get("summary", "Untitled Event"),
+                "start": start_time,
+                "end": end_time,
             }
             formatted_events.append(formatted_event)
 
         return {
             "status": "success",
             "message": f"Found {len(formatted_events)} event(s).",
-            "events": formatted_events,
+            "calendar": {
+                "events": formatted_events
+            }
         }
 
     except Exception as e:
