@@ -352,3 +352,17 @@ async def get_todays_session():
         "session": result['documents'][0],
         "metadata": result['metadatas'][0]
     }
+
+@app.get("/api/session/{date}")
+async def get_session_by_date(date: str):
+    """Get session for a specific date in YYYY-MM-DD format."""
+    try:
+        result = chroma_service.get_session_by_date(date)
+        if not result or not result.get('documents') or not result['documents']:
+            raise HTTPException(status_code=404, detail=f"No session found for date: {date}")
+        return {
+            "session": result['documents'][0],
+            "metadata": result['metadatas'][0]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
