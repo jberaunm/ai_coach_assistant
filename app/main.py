@@ -195,8 +195,10 @@ app.add_middleware(
 
 # Get the absolute path to the app directory
 APP_DIR = Path(__file__).parent
+FRONT_END_DIR = Path(__file__).parent.parent / "frontend"
 # STATIC_DIR = APP_DIR / "static"   # Removed
 UPLOAD_DIR = APP_DIR / "uploads"
+PUBLIC_DIR = FRONT_END_DIR / "public"
 
 # Store active WebSocket connections
 websocket_connections = {}
@@ -338,7 +340,7 @@ async def training_plan_exists():
 
 @app.get("/favicon.ico")
 async def favicon():
-    return FileResponse(STATIC_DIR / "favicon.ico")
+    return FileResponse(PUBLIC_DIR / "favicon.ico")
 
 @app.get("/api/todays-session")
 async def get_todays_session():
