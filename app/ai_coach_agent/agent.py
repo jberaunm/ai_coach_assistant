@@ -25,7 +25,10 @@ from .tools import (
     get_weather_forecast,
     read_training_plan,
     write_chromaDB,
-    get_session_by_date
+    get_session_by_date,
+    update_sessions_calendar_by_date,
+    update_sessions_weather_by_date,
+    update_sessions_time_scheduled_by_date
 )
 
 planner_agent = LlmAgent(
@@ -37,7 +40,7 @@ planner_agent = LlmAgent(
     ),
     instruction=f"""
     You are a planner agent, you can understand the training plan given by the user and parse it. You will use the tool `read_training_plan` to access the content.
-    Once plan is parsed, you will insert the data into the ChromaDB using the tool `write_ChromaDB`
+    Once plan is parsed, you will insert the data into the ChromaDB using the tool `write_chromaDB`
     You can also provide Session query operations to the ChromaDB.
 
     ## Today's date
@@ -51,9 +54,18 @@ planner_agent = LlmAgent(
        - `date`: date of the session planned.
        - `day`: day of the week.
        - `type`: type of session, including `Easy Run`, `Long Run`, `Speed Session`, `Hill Session`, `Tempo` or `Rest` when no session is planned
-       - `distance`: distance in kilometres of the session. If "kilometres" or "km" are not provided, asume the distance value is in Kilometres = km
+       - `distance`: distance in kilometres of the session. If "kilometres" or "km" are not provided, assume the distance value is in Kilometres = km
        - `notes`: additional instructions of the session that could include pace in min/km (velocity) OR segments (warm up, cool down, 3k, 2k, jogging, walking)
-       OR finish with strides, or finish with a Strength session. If no Notes are parsed, don't create any informatkonthen leave it as blank "".
+       OR finish with strides, or finish with a Strength session. If no Notes are parsed, don't create any information then leave it as blank "".
+    
+    ## ChromaDB Storage
+    The `write_chromaDB` tool will automatically store sessions with the following metadata structure:
+    - Basic session info: date, day, type, distance, notes
+    - Calendar events: initially empty, can be populated later
+    - Weather data: initially empty, can be populated later  
+    - Time scheduling: initially empty, can be populated later
+    - Session completion status: initially set to false
+    
     This information will be used to insert data to the DataBase using the tool `write_chromaDB`
 
     ## Response format
@@ -62,7 +74,7 @@ planner_agent = LlmAgent(
     2. A summary of the training plan (number of sessions, date range)
     For example:
     "I've processed your training plan. It contains 12 sessions from June 15 to June 30, 2025.
-    The plan includes 3 long runs, 4 easy runs, 2 speed sessions, and 3 rest days.
+    The plan includes 3 long runs, 4 easy runs, 2 speed sessions, and 3 rest days."
 
     ## Error handling
     If you encounter any issues:
@@ -70,89 +82,74 @@ planner_agent = LlmAgent(
     2. Suggest what might be wrong
     3. Ask for clarification if needed
     """,
-    tools=[read_training_plan,write_chromaDB,get_session_by_date],
+    tools=[read_training_plan,write_chromaDB],
 )
 
 scheduler_agent = LlmAgent(
     name="scheduler_agent",
     model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
-    description="Schedules the ideal time for today's run.",
+    description="Schedules training sessions based on calendar and weather data.",
     instruction=f"""
-    You are a scheduler agent, a helpful assistant that can peform various tasks
-    helping with calendar operations, weather forecast and scheduling training sessions
+    You are a scheduler agent that helps users find the best time for their training sessions.
 
     ## Today's date
     Today's date is {get_current_time()}.
-    If the user asks relative dates such as today, tomorrow, next tuesday, etc, use today's date and then add the relative date.
 
-    ## Calendar operations
-    You can perform calendar operations directly using these tools:
-    - `list_events`: Show events from your calendar for a specific time period
-    - `create_event`: Add a new event to your calendar 
-    - `edit_event`: Edit an existing event (change title or reschedule)
-    - `delete_event`: Remove an event from your calendar
-    - `find_free_time`: Find available free time slots in your calendar
- 
-    ## Event listing guidelines
-    For listing events:
-    - You MUST always use `start_date` as input when using the tool `list_events`
-    - If no date is mentioned, use today's date for start_date, which will default to today
-    - If a specific date is mentioned, format it as YYYY-MM-DD
-    - Always pass "primary" as the calendar_id
-    - Always pass 100 for max_results (the function internally handles this)
+    ## Main Workflow: "What's my schedule for [date]?"
+    When asked about a schedule for a specific date, follow this exact process:
 
-    ## Calendar response format
-    When the `list_events` tool returns calendar data, it will be in this structured format:
+    1. **Get training session**: Use `get_session_by_date` with the requested date
+    2. **Get calendar events**: Use `list_events` with start_date=requested_date
+    3. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 2
+    4. **Get weather forecast**: Use `get_weather_forecast` with date=requested_date
+    5. **Update weather in DB**: Use `update_sessions_weather_by_date` with the same date and weather from step 4
+    6. **Find the best time to do the training session**: based on calendar events and weather conditions, create a time_scheduled structure with start and end time, temperature, and weather description.
+    7. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
+    8. **Present information**: Show calendar events and information about the best training time
+
+    ## Response Format
+    Always respond with:
+    1. **Calendar events**: "Your calendar shows: [Event Title] from [start] to [end]"
+    2. **Training suggestion**: "I suggest you schedule your '[Session Type]' at [time], as it will be [weather condition] with [temperature]°C."
+
+    ## Example
+    For "What's my schedule for 2025-07-09?":
+    - Get session: `get_session_by_date("2025-07-09")`
+    - Get calendar: `list_events(start_date="2025-07-09")`
+    - Update calendar: `update_sessions_calendar_by_date("2025-07-09", events)`
+    - Get weather: `get_weather_forecast(date="2025-07-09")`
+    - Update weather: `update_sessions_weather_by_date("2025-07-09", weather_data)`
+    - Find best time: based on calendar events and weather conditions, create a time_scheduled structure.
+    - Update time_scheduled: `update_sessions_time_scheduled_by_date("2025-07-09", time_scheduled_data)`
+    - Respond: "Your calendar shows: Meeting 1 from 10:00 to 11:00. I suggest you schedule your 'Easy Run' at 12:00, as it will be Cloudy with 8°C."
+
+    ## Time Scheduled Data Structure
+    When creating time_scheduled data, use this exact structure:
     ```json
-    {{
-        "status": "success",
-        "message": "Found X event(s).",
-        "calendar": {{
-            "events": [
-                {{"title": "Meeting 1", "start": "10:00", "end": "11:00"}},
-                {{"title": "Meeting 2", "start": "11:00", "end": "12:00"}},
-                {{"title": "Meeting 3", "start": "16:00", "end": "17:00"}}
-            ]
+    [
+        {{
+            "title": "Session type and distance (e.g., 'Easy run 10k')",
+            "start": "HH:MM (24-hour format)",
+            "end": "HH:MM (24-hour format)", 
+            "tempC": "Temperature in Celsius (string)",
+            "desc": "Weather description (e.g., 'Clear', 'Cloudy')",
+            "status": "scheduled"
         }}
-    }}
+    ]
     ```
-    
-    When presenting calendar events to users, ALWAYS use this exact format:
-    - Use the "title" field for event names
-    - Use the "start" and "end" fields for times (in HH:MM format)
-    - Present events in chronological order
-    - Format your response like: "Your calendar shows: [Event Title] from [start] to [end]"
 
-    ## Weather forecast
-    For weather information:
-    - You can get weather forecast using the tool `get_weather_forecast`, always include the date as part of the input
-    - You MUST always use `date` as input when using the tool `get_weather_forecast`
-    - If no date is mentioned, use today's date for start_date, which will default to today
-    - If a specific date is mentioned, format it as YYYY-MM-DD
-    - Response format: 1. Current weather information and 2. Next hourly weather forecast for the particular day
-
-    ## Scheduling training sessions
-    You can find a convenient time for the user to train, based on weather conditions and calendar availability.
-    When the user asks about the training session from an specific date, you MUST:
-    - Retrieve training session for that particular date using the tool `get_session_by_date`
-    - Retrieve calendar events for that particular date
-    - Retrieve current and weather forecast conditions for that particular date
-    - With all information above, you will suggest a time of the date to schedule the training session
-    
-    ## Response format for scheduling
-    After finding the best time, you MUST include the following list as part of you response:
-    1. Present calendar events in the structured format: "Your calendar shows: [Event Title] from [start] to [end]"
-    2. The time suggested for the training session, including the weather forecast.
-    
-    ## Example response
-    "Your calendar shows:
-    - Meeting 1 from 10:00 to 11:00
-    - Meeting 2 from 15:00 to 17:00
-    
-    I suggest you schedule your 'Easy Run' at 12:00, as it will be Cloudy with 8°C."
-
+    ## Important Notes
+    - Always use YYYY-MM-DD format for dates
+    - Always update ChromaDB after retrieving calendar and weather data
+    - Be concise and only provide the requested information
+    - The time_scheduled data must be a list of dictionaries with all required fields
     """,
-    tools=[get_weather_forecast, list_events]
+    tools=[get_weather_forecast,
+           list_events,
+           get_session_by_date,
+           update_sessions_calendar_by_date,
+           update_sessions_weather_by_date,
+           update_sessions_time_scheduled_by_date]
 )
 
 strava_agent = LlmAgent(

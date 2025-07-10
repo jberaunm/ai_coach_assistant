@@ -1,34 +1,121 @@
 import requests
 import xml.etree.ElementTree as ET
+import os
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional
+from dotenv import load_dotenv
 
-def get_weather_forecast() -> list:
-    #url = "https://example.com/weather-api?lat=48.85&lon=2.35"
-    url= "http://api.worldweatheronline.com/premium/v1/weather.ashx?key=39442c0a352e4a3ba47212917252103&date=today&q=51.59,-0.24&num_of_days=1&tp=1&format=xml"
-    response = requests.get(url)
+# Load environment variables
+load_dotenv()
 
-    if response.status_code != 200:
-        return [{"status": "error", "message": "Failed to retrieve data."}]
+def get_weather_forecast(date: Optional[str] = None) -> Dict:
+    """
+    Get weather forecast for a specific date.
+    
+    Args:
+        date: Date in YYYY-MM-DD format. If None, uses today's date.
+        
+    Returns:
+        Dict containing weather forecast data with current conditions and hourly forecast
+    """
+    # Get API key from environment variable or use fallback
+    api_key = os.getenv("WORLDWEATHER_API_KEY")
 
-    root = ET.fromstring(response.content)
-
-    # Extract hourly forecasts for the first <weather> entry
-    weather = root.find("weather")
-    hourly_data = weather.findall("hourly")
-
-    forecast = []
-    for hour in hourly_data:
-        time = hour.findtext("time")
-        temp = hour.findtext("tempC")
-        condition = hour.findtext("weatherDesc")
-        #icon = hour.findtext("weatherIconUrl")
-        #uv = hour.findtext("uvIndex")
-
-        forecast.append({
-            "time": f"{int(time)//100:02d}:00",  # Convert "1200" → "12:00"
-            "tempC": int(temp),
-            "uvIndex": int(uv),
-            "desc": condition.strip() if condition else "",
-            "icon": icon.strip() if icon else ""
-        })
-
-    return forecast
+    # Hardcoded coordinates for London
+    lat = "51.59"
+    lon = "-0.24"
+    
+    # Use today's date if none provided
+    if date is None:
+        date = datetime.now().strftime("%Y-%m-%d")
+    
+    # Build URL with parameters
+    url = f"http://api.worldweatheronline.com/premium/v1/weather.ashx"
+    params = {
+        "key": api_key,
+        "date": date,
+        "q": f"{lat},{lon}",
+        "num_of_days": "1",
+        "tp": "1",  # 1-hour intervals
+        "format": "xml"
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        
+        if response.status_code != 200:
+            return {
+                "status": "error", 
+                "message": f"Failed to retrieve data. Status code: {response.status_code}"
+            }
+        
+        root = ET.fromstring(response.content)
+        
+        # Get current conditions
+        current_condition = root.find("current_condition")
+        current_data = {}
+        if current_condition is not None:
+            current_data = {
+                "observation_time": current_condition.findtext("observation_time"),
+                "tempC": current_condition.findtext("temp_C"),
+                "weatherDesc": current_condition.findtext("weatherDesc"),
+            }
+        
+        # Get hourly forecasts
+        weather = root.find("weather")
+        if weather is None:
+            return {
+                "status": "error",
+                "message": "No weather data found in response"
+            }
+        
+        hourly_data = weather.findall("hourly")
+        
+        # Get current time to filter future hours
+        current_time = datetime.now()
+        target_date = datetime.strptime(date, "%Y-%m-%d")
+        
+        # If target date is today, filter by current hour
+        if target_date.date() == current_time.date():
+            current_hour = current_time.hour
+        else:
+            # If target date is in the future, include all hours
+            current_hour = -1
+        
+        forecast_hours = []
+        for hour in hourly_data:
+            time_str = hour.findtext("time")
+            if time_str is None:
+                continue
+                
+            # Convert time format (e.g., "2200" to hour 22)
+            try:
+                hour_int = int(time_str) // 100
+            except ValueError:
+                continue
+            
+            # Only include future hours
+            if hour_int > current_hour:
+                temp = hour.findtext("tempC")
+                condition = hour.findtext("weatherDesc")
+                
+                forecast_hours.append({
+                    "time": f"{hour_int:02d}:00",
+                    "tempC": temp,
+                    "desc": condition.strip() if condition else "",
+                })
+        
+        return {
+            "status": "success",
+            "date": date,
+            "current_condition": current_data,
+            "weather": {
+                "hours": forecast_hours
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error retrieving weather data: {str(e)}"
+        }
