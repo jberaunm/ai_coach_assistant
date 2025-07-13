@@ -9,6 +9,7 @@ import WeatherForecast from "./components/WeatherForecast";
 import WeeklyStats from "./components/WeeklyStats";
 import AgentFlowDiagram from "./components/AgentFlowDiagram";
 import AgentFlowDiagramReactFlow from "./components/AgentFlowDiagramReactFlow";
+import { SessionDataProvider } from "./contexts/SessionDataContext";
 
 export default function Home() {
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
@@ -117,11 +118,13 @@ export default function Home() {
         </nav>
       </header>
       <div className="dashboard-layout">
-        <div className="main-stats-container">
-          <DayOverviewCard date={sharedDate} onDateChange={setSharedDate} />
-          <WeatherForecast date={sharedDate} />
-          <EventsCalendar date={sharedDate} />
-        </div>
+        <SessionDataProvider date={sharedDate} websocket={websocket}>
+          <div className="main-stats-container">
+            <DayOverviewCard date={sharedDate} onDateChange={setSharedDate} />
+            <WeatherForecast date={sharedDate} />
+            <EventsCalendar date={sharedDate} />
+          </div>
+        </SessionDataProvider>
         <div className="side-containers">
           <WeeklyStats date={sharedDate} />
           <div className="stat-card">

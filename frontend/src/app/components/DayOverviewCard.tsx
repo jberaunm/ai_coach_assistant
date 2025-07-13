@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSessionData } from "../contexts/SessionDataContext";
 
 interface DayOverviewCardProps {
   date: Date;
@@ -6,18 +7,12 @@ interface DayOverviewCardProps {
 }
 
 export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardProps) {
-  const [plan, setPlan] = useState("Loading...");
-  const [weather, setWeather] = useState("Loading...");
-  const [scheduledTime, setScheduledTime] = useState("Loading...");
-
-  useEffect(() => {
-    // Placeholder fetch logic for plan
-    setPlan(`Plan for ${date.toDateString()}`);
-    // Placeholder fetch logic for weather
-    setWeather(`Weather for ${date.toDateString()}`);
-    // Placeholder fetch logic for scheduled time
-    setScheduledTime(`08:00 AM`);
-  }, [date]);
+  const { sessionData, loading, error, forceSchedule, scheduling } = useSessionData();
+  
+  // Extract data from shared context
+  const sessionType = sessionData?.metadata?.type || "No Session";
+  const distance = sessionData?.metadata?.distance?.toString() || "0";
+  const notes = sessionData?.metadata?.notes || "No additional notes";
 
   const goToNextDay = () => {
     const next = new Date(date);
@@ -42,8 +37,48 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={goToPrevDay}>{'<'}</button>
-        <h1>{date.toDateString()}</h1>
-        <button onClick={goToNextDay}>{'>'}</button>
+        <div style={{ textAlign: "center" }}>
+          <h1>{date.toDateString()}</h1>
+          {scheduling && (
+            <div style={{ 
+              fontSize: "12px", 
+              color: "#666", 
+              marginTop: "4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px"
+            }}>
+              <div style={{ 
+                width: "8px", 
+                height: "8px", 
+                borderRadius: "50%", 
+                backgroundColor: "#007bff",
+                animation: "pulse-dot 1.5s infinite"
+              }}></div>
+              Scheduling...
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button 
+            onClick={forceSchedule}
+            disabled={scheduling}
+            style={{
+              padding: "4px 8px",
+              fontSize: "12px",
+              backgroundColor: scheduling ? "#ccc" : "#007bff",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: scheduling ? "not-allowed" : "pointer"
+            }}
+            title="Refresh schedule data"
+          >
+            🔄
+          </button>
+          <button onClick={goToNextDay}>{'>'}</button>
+        </div>
       </div>
       {/*<h3 className="stat-value">Plan: {plan}</h3>*/}
       <div style={{ 
@@ -60,22 +95,37 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
           alignItems: "center",
           flex: 1
         }}>
-          <div style={{ 
-            fontSize: "46px", 
-            fontWeight: "600", 
-            color: "var(--primary-color)",
-            lineHeight: "1.2"
-          }}>
-            Easy
-          </div>
-          <div style={{ 
-            fontSize: "34px", 
-            fontWeight: "500", 
-            color: "var(--primary-color)",
-            lineHeight: "1.2"
-          }}>
-            Run
-          </div>
+          {loading ? (
+            <div style={{ 
+              fontSize: "46px", 
+              fontWeight: "600", 
+              color: "var(--primary-color)",
+              lineHeight: "1.2"
+            }}>
+              Loading...
+            </div>
+          ) : (
+            <>
+              <div style={{ 
+                fontSize: "46px", 
+                fontWeight: "600", 
+                color: "var(--primary-color)",
+                lineHeight: "1.2"
+              }}>
+                {sessionType === "Loading..." || sessionType === "No Session" ? "No" : 
+                 sessionType.includes(" ") ? sessionType.split(" ")[0] : sessionType}
+              </div>
+              <div style={{ 
+                fontSize: "34px", 
+                fontWeight: "500", 
+                color: "var(--primary-color)",
+                lineHeight: "1.2"
+              }}>
+                {sessionType === "Loading..." || sessionType === "No Session" ? "Session" : 
+                 sessionType.includes(" ") ? sessionType.split(" ").slice(1).join(" ") : ""}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Column 2: Distance */}
@@ -91,8 +141,14 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
             color: "var(--primary-color)",
             lineHeight: "1.2"
           }}>
-            <span style={{ fontWeight: "600" }}>8</span>
-            <span style={{ fontWeight: "300", fontSize: "60px" }}>k</span>
+            {loading ? (
+              <span>...</span>
+            ) : (
+              <>
+                <span style={{ fontWeight: "600" }}>{distance}</span>
+                <span style={{ fontWeight: "300", fontSize: "60px" }}>k</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -111,7 +167,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
             color: "var(--primary-color)",
             lineHeight: "1.3"
           }}>
-            Finish with strides
+            {loading ? "Loading..." : notes}
           </div>
         </div>
       </div>
