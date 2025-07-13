@@ -2,6 +2,7 @@ import chromadb
 from chromadb.config import Settings
 from pathlib import Path
 import os
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
@@ -20,8 +21,16 @@ class ChromaService:
             settings=Settings(
                 anonymized_telemetry=False,
                 allow_reset=True
+                #is_persistent=True
             )
         )
+        
+        # Disable telemetry to avoid capture() error
+        try:
+            import chromadb.telemetry as telemetry_module
+            telemetry_module.TelemetryClient = None
+        except:
+            pass
         
         # Create or get the main collection
         self.collection = self.client.get_or_create_collection(
@@ -119,7 +128,7 @@ class ChromaService:
                     doc += f", {session['notes']}"
                 documents.append(doc)
             
-            # Prepare metadata for each session
+            # Prepare metadata for each session with new structure
             metadatas = []
             for session in sessions:
                 session_metadata = {
@@ -128,8 +137,14 @@ class ChromaService:
                     "type": session["type"],
                     "distance": session["distance"],
                     "notes": session.get("notes", ""),
-                    "time": "",  # Empty string instead of None
-                    "weather": "",  # Empty string instead of None
+                    # New fields with default empty values (serialized as JSON strings)
+                    "calendar": json.dumps({
+                        "events": []
+                    }),
+                    "weather": json.dumps({
+                        "hours": []
+                    }),
+                    "time_scheduled": json.dumps([]),
                     "session_completed": False
                 }
                 metadatas.append(session_metadata)
@@ -158,15 +173,221 @@ class ChromaService:
             print(f"Error retrieving training plan: {str(e)}")
             return None
         
-    def get_session_by_date(self,date: str) -> List[Dict]:
+
+
+    def update_session_calendar(self, session_id: str, calendar_events: List[Dict]) -> bool:
+        """Update calendar events for a specific session.
+        
+        Args:
+            session_id: The session ID to update
+            calendar_events: List of calendar events
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get current session metadata
+            result = self.collection.get(ids=[session_id])
+            if not result['ids']:
+                return False
+            
+            current_metadata = result['metadatas'][0]
+            
+            # Update calendar events
+            current_metadata['calendar'] = json.dumps({
+                "events": calendar_events
+            })
+            
+            # Update the session
+            self.collection.update(
+                ids=[session_id],
+                metadatas=[current_metadata]
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating session calendar: {str(e)}")
+            return False
+
+    def update_session_weather(self, session_id: str, weather_data: Dict) -> bool:
+        """Update weather data for a specific session.
+        
+        Args:
+            session_id: The session ID to update
+            weather_data: Weather data with hours array
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get current session metadata
+            result = self.collection.get(ids=[session_id])
+            if not result['ids']:
+                return False
+            
+            current_metadata = result['metadatas'][0]
+            
+            # Update weather data
+            current_metadata['weather'] = json.dumps(weather_data)
+            
+            # Update the session
+            self.collection.update(
+                ids=[session_id],
+                metadatas=[current_metadata]
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating session weather: {str(e)}")
+            return False
+
+    def update_session_time_scheduled(self, session_id: str, time_scheduled: List[Dict]) -> bool:
+        """Update time scheduling for a specific session.
+        
+        Args:
+            session_id: The session ID to update
+            time_scheduled: List of scheduled time slots
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get current session metadata
+            result = self.collection.get(ids=[session_id])
+            if not result['ids']:
+                return False
+            
+            current_metadata = result['metadatas'][0]
+            
+            # Update time scheduled
+            current_metadata['time_scheduled'] = json.dumps(time_scheduled)
+            
+            # Update the session
+            self.collection.update(
+                ids=[session_id],
+                metadatas=[current_metadata]
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating session time scheduled: {str(e)}")
+            return False
+
+    def update_session_status(self, session_id: str, session_completed: bool) -> bool:
+        """Update session completion status.
+        
+        Args:
+            session_id: The session ID to update
+            session_completed: Whether the session is completed
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get current session metadata
+            result = self.collection.get(ids=[session_id])
+            if not result['ids']:
+                return False
+            
+            current_metadata = result['metadatas'][0]
+            
+            # Update session completion status
+            current_metadata['session_completed'] = session_completed
+            
+            # Update the session
+            self.collection.update(
+                ids=[session_id],
+                metadatas=[current_metadata]
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating session status: {str(e)}")
+            return False
+
+    def update_session_metadata(self, session_id: str, updates: Dict) -> bool:
+        """Update multiple metadata fields for a specific session.
+        
+        Args:
+            session_id: The session ID to update
+            updates: Dictionary of metadata fields to update
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get current session metadata
+            result = self.collection.get(ids=[session_id])
+            if not result['ids']:
+                return False
+            
+            current_metadata = result['metadatas'][0]
+            
+            # Update the metadata with new values
+            current_metadata.update(updates)
+            
+            # Update the session
+            self.collection.update(
+                ids=[session_id],
+                metadatas=[current_metadata]
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating session metadata: {str(e)}")
+            return False
+
+    def _deserialize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper method to deserialize JSON strings in metadata back to objects."""
+        try:
+            deserialized = metadata.copy()
+            
+            # Deserialize calendar events
+            if 'calendar' in deserialized and isinstance(deserialized['calendar'], str):
+                try:
+                    deserialized['calendar'] = json.loads(deserialized['calendar'])
+                except json.JSONDecodeError:
+                    deserialized['calendar'] = {"events": []}
+            
+            # Deserialize weather data
+            if 'weather' in deserialized and isinstance(deserialized['weather'], str):
+                try:
+                    deserialized['weather'] = json.loads(deserialized['weather'])
+                except json.JSONDecodeError:
+                    deserialized['weather'] = {"hours": []}
+            
+            # Deserialize time scheduled
+            if 'time_scheduled' in deserialized and isinstance(deserialized['time_scheduled'], str):
+                try:
+                    deserialized['time_scheduled'] = json.loads(deserialized['time_scheduled'])
+                except json.JSONDecodeError:
+                    deserialized['time_scheduled'] = []
+            
+            return deserialized
+        except Exception as e:
+            print(f"Error deserializing metadata: {str(e)}")
+            return metadata
+
+    def get_session_by_date(self, date: str) -> List[Dict]:
         """Get sessions from a specific date IN THE FORMAT YYYY-MM-DD"""
         try:
             results = self.collection.get(where={"date": date})
+            
+            # Deserialize JSON strings in metadata
+            if results and 'metadatas' in results:
+                for i, metadata in enumerate(results['metadatas']):
+                    results['metadatas'][i] = self._deserialize_metadata(metadata)
+            
             return results
         except Exception as e:
             print(f"Error retrieving today's sessions: {str(e)}")
             return []
-    
+
     def get_upcoming_sessions(self, days: int = 7) -> List[Dict]:
         """Get sessions scheduled for the next n days."""
         try:
@@ -181,6 +402,12 @@ class ChromaService:
                     }
                 }
             )
+            
+            # Deserialize JSON strings in metadata
+            if results and 'metadatas' in results and results['metadatas']:
+                for i, metadata in enumerate(results['metadatas'][0]):
+                    results['metadatas'][0][i] = self._deserialize_metadata(metadata)
+            
             return results
         except Exception as e:
             print(f"Error retrieving upcoming sessions: {str(e)}")
@@ -207,13 +434,14 @@ class ChromaService:
                     "message": "No sessions found in ChromaDB"
                 }
             
-            # Format the results
+            # Format the results and deserialize metadata
             sessions = []
             for i in range(len(results['ids'])):
+                metadata = self._deserialize_metadata(results['metadatas'][i])
                 session = {
                     "id": results['ids'][i],
                     "document": results['documents'][i],
-                    "metadata": results['metadatas'][i]
+                    "metadata": metadata
                 }
                 sessions.append(session)
             

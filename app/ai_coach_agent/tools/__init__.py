@@ -12,7 +12,7 @@ from .list_events import list_events
 from .strava_tools3 import list_activities
 from .get_weather import get_weather_forecast
 from .training_plan_parser import read_training_plan
-from .chromaDB_tools import write_chromaDB,get_session_by_date
+from .chromaDB_tools import write_chromaDB,get_session_by_date,update_sessions_calendar_by_date,update_sessions_weather_by_date,update_sessions_time_scheduled_by_date
 
 __all__ = [
     "create_event",
@@ -24,5 +24,8 @@ __all__ = [
     "get_weather_forecast",
     "read_training_plan",
     "write_chromaDB",
-    "get_session_by_date"
+    "get_session_by_date",
+    "update_sessions_calendar_by_date",
+    "update_sessions_weather_by_date",
+    "update_sessions_time_scheduled_by_date"
 ]

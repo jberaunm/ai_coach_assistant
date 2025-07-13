@@ -115,8 +115,8 @@ def get_current_time() -> dict:
     """
     now = datetime.now()
 
-    # Format date as MM-DD-YYYY
-    formatted_date = now.strftime("%m-%d-%Y")
+    # Format date as DD-MM-YYYY
+    formatted_date = now.strftime("%Y-%m-%d")
 
     return {
         "current_time": now.strftime("%Y-%m-%d %H:%M:%S"),
