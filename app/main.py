@@ -100,7 +100,7 @@ async def agent_to_client_messaging(
                     "interrupted": event.interrupted,
                 }
                 await websocket.send_text(json.dumps(message))
-                print(f"[AGENT TO CLIENT]: {message}")
+                #print(f"[AGENT TO CLIENT]: {message}")
                 continue
 
             # Read the Content and its first Part
@@ -121,7 +121,7 @@ async def agent_to_client_messaging(
                     "role": "model",
                 }
                 await websocket.send_text(json.dumps(message))
-                print(f"[AGENT TO CLIENT]: text/plain: {part.text}")
+                #print(f"[AGENT TO CLIENT]: text/plain: {part.text}")
 
             # If it's audio, send Base64 encoded audio data
             is_audio = (
@@ -138,7 +138,7 @@ async def agent_to_client_messaging(
                         "role": "model",
                     }
                     await websocket.send_text(json.dumps(message))
-                    print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
+                    #print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
     except Exception as e:
         print(f"Error in agent_to_client_messaging: {e}")
         raise
@@ -161,7 +161,7 @@ async def client_to_agent_messaging(
             # Send a text message
             content = types.Content(role=role, parts=[types.Part.from_text(text=data)])
             live_request_queue.send_content(content=content)
-            print(f"[CLIENT TO AGENT PRINT]: {data}")
+            print(f"[FRONTEND TO AGENT]: {data}")
         elif mime_type == "audio/pcm":
             # Send audio data
             decoded_data = base64.b64decode(data)
@@ -172,7 +172,7 @@ async def client_to_agent_messaging(
             live_request_queue.send_realtime(
                 types.Blob(data=decoded_data, mime_type=mime_type)
             )
-            print(f"[CLIENT TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
+            print(f"[FRONTEND TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
 
         else:
             raise ValueError(f"Mime type not supported: {mime_type}")
@@ -195,8 +195,10 @@ app.add_middleware(
 
 # Get the absolute path to the app directory
 APP_DIR = Path(__file__).parent
+FRONT_END_DIR = Path(__file__).parent.parent / "frontend"
 # STATIC_DIR = APP_DIR / "static"   # Removed
 UPLOAD_DIR = APP_DIR / "uploads"
+PUBLIC_DIR = FRONT_END_DIR / "public"
 
 # Store active WebSocket connections
 websocket_connections = {}
@@ -228,7 +230,7 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
         print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
         
         # Create a safe filename
-        safe_filename = file.filename.replace(" ", "_")
+        safe_filename = file.filename.replace(" ", "_").replace("\\", "_").replace("/", "_")
         file_path = UPLOAD_DIR / safe_filename
         
         # Save the file
@@ -236,14 +238,19 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
             content = await file.read()
             buffer.write(content)
         
+        print(f"File saved successfully at: {file_path}")
+        print(f"File exists: {file_path.exists()}")
+        print(f"File size: {file_path.stat().st_size} bytes")
+        
         # Send a message through WebSocket
         if session_id in websocket_connections:
             print(f"Sending WebSocket message to session {session_id}")
             
-            # Create a message to send to the agent
+            # Create a message to send to the agent with normalized file path
+            normalized_path = str(file_path).replace('\\', '/')  # Normalize path separators
             message = {
                 "mime_type": "text/plain",
-                "data": f"can you parse my training plan? this is the file path: {file_path}",
+                "data": f"can you parse my training plan? this is the file path: {normalized_path}",
                 "role": "user"
             }
             
@@ -338,7 +345,7 @@ async def training_plan_exists():
 
 @app.get("/favicon.ico")
 async def favicon():
-    return FileResponse(STATIC_DIR / "favicon.ico")
+    return FileResponse(PUBLIC_DIR / "favicon.ico")
 
 @app.get("/api/todays-session")
 async def get_todays_session():
@@ -350,3 +357,17 @@ async def get_todays_session():
         "session": result['documents'][0],
         "metadata": result['metadatas'][0]
     }
+
+@app.get("/api/session/{date}")
+async def get_session_by_date(date: str):
+    """Get session for a specific date in YYYY-MM-DD format."""
+    try:
+        result = chroma_service.get_session_by_date(date)
+        if not result or not result.get('documents') or not result['documents']:
+            raise HTTPException(status_code=404, detail=f"No session found for date: {date}")
+        return {
+            "session": result['documents'][0],
+            "metadata": result['metadatas'][0]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
