@@ -239,6 +239,12 @@ button {
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
+
+@keyframes pulse-dot {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
 button:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);

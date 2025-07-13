@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSessionData } from "../contexts/SessionDataContext";
 
 interface Event {
   id: number;
@@ -13,17 +14,27 @@ interface EventsCalendarProps {
 }
 
 export default function EventsCalendar({ date }: EventsCalendarProps) {
+  const { sessionData, loading, error } = useSessionData();
   const [events, setEvents] = useState<Event[]>([]);
 
   useEffect(() => {
-    // Placeholder fetch logic for events
-    setEvents([
-      { id: 1, startTime: "10:00", endTime: "10:30", title: "Meeting A", isAI: false },
-      { id: 2, startTime: "12:00", endTime: "13:30", title: "Meeting B", isAI: false },
-      { id: 3, startTime: "14:00", endTime: "14:30", title: "Running Session", isAI: true },
-      { id: 4, startTime: "15:00", endTime: "15:30", title: "Meeting D", isAI: false },
-    ]);
-  }, [date]);
+    if (sessionData?.metadata?.calendar?.events) {
+      const calendarEvents = sessionData.metadata.calendar.events;
+      
+      // Convert calendar events to the component's Event format
+      const formattedEvents = calendarEvents.map((event: any, index: number) => ({
+        id: index + 1,
+        startTime: event.start,
+        endTime: event.end,
+        title: event.title || "Untitled Event",
+        isAI: event.title ? event.title.endsWith("AI Coach Session") : false // Check if event was created by AI
+      }));
+      
+      setEvents(formattedEvents);
+    } else {
+      setEvents([]);
+    }
+  }, [sessionData]);
 
   return (
     <div className="stat-card events-calendar-card">
@@ -43,7 +54,11 @@ export default function EventsCalendar({ date }: EventsCalendarProps) {
         </div>
         <div style={{ flex: 1 }}>
           <div className="calendar-events">
-            {events.length > 0 ? (
+            {loading ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+                Loading calendar events...
+              </div>
+            ) : events.length > 0 ? (
               events.map((event) => (
                 <div key={event.id} className={`event-slot ${event.isAI ? 'ai-event' : ''}`}>
                   <div className="event-time">
