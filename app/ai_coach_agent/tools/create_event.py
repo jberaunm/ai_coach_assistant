@@ -6,24 +6,26 @@ import datetime
 
 from .calendar_utils import get_calendar_service, parse_datetime
 
-
 def create_event(
-    summary: str,
+    date: str,
     start_time: str,
     end_time: str,
+    title: str,
 ) -> dict:
     """
     Create a new event in Google Calendar.
 
     Args:
-        summary (str): Event title/summary
-        start_time (str): Start time (e.g., "2023-12-31 14:00")
-        end_time (str): End time (e.g., "2023-12-31 15:00")
+        date (str): Date in YYYY-MM-DD format
+        start_time (str): Start time in HH:MM format (24-hour)
+        end_time (str): End time in HH:MM format (24-hour)
+        title (str): Event title
 
     Returns:
         dict: Information about the created event or error details
     """
     try:
+        print(f"[Tool - Google Calendar API]: create_event({date},{start_time},{end_time},{title})")
         # Get calendar service
         service = get_calendar_service()
         if not service:
@@ -35,14 +37,18 @@ def create_event(
         # Always use primary calendar
         calendar_id = "primary"
 
+        # Combine date and times
+        start_datetime = f"{date} {start_time}"
+        end_datetime = f"{date} {end_time}"
+
         # Parse times
-        start_dt = parse_datetime(start_time)
-        end_dt = parse_datetime(end_time)
+        start_dt = parse_datetime(start_datetime)
+        end_dt = parse_datetime(end_datetime)
 
         if not start_dt or not end_dt:
             return {
                 "status": "error",
-                "message": "Invalid date/time format. Please use YYYY-MM-DD HH:MM format.",
+                "message": "Invalid date/time format. Please use YYYY-MM-DD for date and HH:MM for time.",
             }
 
         # Dynamically determine timezone
@@ -62,8 +68,8 @@ def create_event(
         # Create event body without type annotations
         event_body = {}
 
-        # Add summary
-        event_body["summary"] = summary
+        # Add title
+        event_body["summary"] = title
 
         # Add start and end times with the dynamically determined timezone
         event_body["start"] = {
