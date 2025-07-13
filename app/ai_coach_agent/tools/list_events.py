@@ -6,7 +6,6 @@ import datetime
 
 from .calendar_utils import format_event_time, get_calendar_service
 
-
 def list_events(
     start_date: str,
     days: int,
@@ -32,9 +31,7 @@ def list_events(
         }
     """
     try:
-        print("Listing events")
-        print("Start date: ", start_date)
-        print("Days: ", days)
+        print(f"[Tool - Google Calendar API]: list_events({start_date})") 
         # Get calendar service
         service = get_calendar_service()
         if not service:

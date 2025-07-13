@@ -41,6 +41,7 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
     }
     
     try:
+        print(f"[Tool - Weather API]: get_weather_forecast({date})")
         response = requests.get(url, params=params)
         
         if response.status_code != 200:

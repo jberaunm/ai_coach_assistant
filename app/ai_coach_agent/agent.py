@@ -81,6 +81,13 @@ planner_agent = LlmAgent(
     1. Report the specific error
     2. Suggest what might be wrong
     3. Ask for clarification if needed
+    
+    ## File path handling
+    When you receive a file path:
+    1. Use the exact path provided by the user
+    2. If the path contains backslashes (\), they will be automatically converted to forward slashes (/)
+    3. The path should point to a file in the uploads directory
+    4. If you cannot read the file, report the specific error and ask the user to try uploading again
     """,
     tools=[read_training_plan,write_chromaDB],
 )
@@ -100,28 +107,43 @@ scheduler_agent = LlmAgent(
 
     1. **Get training session**: Use `get_session_by_date` with the requested date
     2. **Get calendar events**: Use `list_events` with start_date=requested_date
-    3. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 2
-    4. **Get weather forecast**: Use `get_weather_forecast` with date=requested_date
-    5. **Update weather in DB**: Use `update_sessions_weather_by_date` with the same date and weather from step 4
-    6. **Find the best time to do the training session**: based on calendar events and weather conditions, create a time_scheduled structure with start and end time, temperature, and weather description.
-    7. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
-    8. **Present information**: Show calendar events and information about the best training time
+    3. **Check for existing AI training session**: Look through the calendar events from step 2. If any event has a title ending with "AI Coach Session", then a training session has already been scheduled for this date.
+    4. **If AI session exists**: Skip to step 8 and inform the user that the session has already been scheduled.
+    5. **If no AI session exists**: Continue with the following steps:
+       a. **Get weather forecast**: Use `get_weather_forecast` with date=requested_date
+       b. **Find the best time to do the training session**: based on calendar events and weather conditions, create a time_scheduled structure with start and end time, temperature, and weather description.
+       c. **Create training session event**: Use `create_event` to add the suggested training session to the calendar with:
+          - date: the requested date
+          - start_time: from the time_scheduled structure
+          - end_time: from the time_scheduled structure  
+          - title: "[Session Type] [distance] - AI Coach Session" (e.g., "Easy Run 10k - AI Coach Session")
+       d. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 2, including the newly created event in step 5c, using start_time, end_time and title.
+       e. **Update weather in DB**: Use `update_sessions_weather_by_date` with the same date and weather from step 5a
+       f. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
+    6. **Present information**: Show calendar events and information about the training session
+
+    **IMPORTANT**: You MUST execute ALL steps in order. If an AI training session already exists, skip the creation steps and inform the user.
 
     ## Response Format
     Always respond with:
     1. **Calendar events**: "Your calendar shows: [Event Title] from [start] to [end]"
-    2. **Training suggestion**: "I suggest you schedule your '[Session Type]' at [time], as it will be [weather condition] with [temperature]°C."
+    2. **If AI session already exists**: "Your training session has already been scheduled for this date. You can see it in your calendar above."
+    3. **If new session created**: "I've scheduled your '[Session Type] [distance]' from [start_time] to [end_time], as it will be [weather condition] with [temperature]°C."
 
     ## Example
     For "What's my schedule for 2025-07-09?":
     - Get session: `get_session_by_date("2025-07-09")`
     - Get calendar: `list_events(start_date="2025-07-09")`
-    - Update calendar: `update_sessions_calendar_by_date("2025-07-09", events)`
-    - Get weather: `get_weather_forecast(date="2025-07-09")`
-    - Update weather: `update_sessions_weather_by_date("2025-07-09", weather_data)`
-    - Find best time: based on calendar events and weather conditions, create a time_scheduled structure.
-    - Update time_scheduled: `update_sessions_time_scheduled_by_date("2025-07-09", time_scheduled_data)`
-    - Respond: "Your calendar shows: Meeting 1 from 10:00 to 11:00. I suggest you schedule your 'Easy Run' at 12:00, as it will be Cloudy with 8°C."
+    - Check for AI session: Look for events ending with "AI Coach Session"
+    - If AI session exists: Respond with "Your training session has already been scheduled for this date. You can see it in your calendar above."
+    - If no AI session exists:
+      - Get weather: `get_weather_forecast(date="2025-07-09")`
+      - Find best time: based on calendar events and weather conditions, create a time_scheduled structure.
+      - Create event: `create_event("2025-07-09", "12:00", "13:00", "Easy Run 10k - AI Coach Session")`
+      - Update calendar: `update_sessions_calendar_by_date("2025-07-09", events)` (including the new event)
+      - Update weather: `update_sessions_weather_by_date("2025-07-09", weather_data)`
+      - Update time_scheduled: `update_sessions_time_scheduled_by_date("2025-07-09", time_scheduled_data)`
+      - Respond: "Your calendar shows: Meeting 1 from 10:00 to 11:00. I've scheduled your 'Easy Run 10k' from 12:00 to 13:00, as it will be Cloudy with 8°C."
 
     ## Time Scheduled Data Structure
     When creating time_scheduled data, use this exact structure:
@@ -146,6 +168,7 @@ scheduler_agent = LlmAgent(
     """,
     tools=[get_weather_forecast,
            list_events,
+           create_event,
            get_session_by_date,
            update_sessions_calendar_by_date,
            update_sessions_weather_by_date,
