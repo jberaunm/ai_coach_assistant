@@ -2,8 +2,10 @@ import asyncio
 import base64
 import json
 import os
+import warnings
+import logging
 from pathlib import Path
-from typing import AsyncIterable
+from typing import AsyncIterable, Dict, Set
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -21,6 +23,79 @@ from db.chroma_service import chroma_service
 from fastapi.middleware.cors import CORSMiddleware
 
 #
+# WebSocket Log Forwarding
+#
+
+# Store active WebSocket connections for log forwarding
+websocket_connections: Dict[str, WebSocket] = {}
+
+# Module-level variable to store the current WebSocket for log forwarding
+_current_websocket: WebSocket = None
+
+class PrintInterceptor:
+    """Intercepts print statements and forwards them to WebSocket clients"""
+    
+    def __init__(self):
+        self.original_print = print
+        self.interesting_patterns = [
+            '[FRONTEND TO AGENT]',
+            '[FileReader_tool]',
+            '[CalendarAPI_tool_create_event]',
+            '[CalendarAPI_tool_list_events]',
+            '[WeatherAPI_tool]',
+            '[StravaAPI_tool]',
+            '[PLANNER_AGENT]',
+            '[SCHEDULER_AGENT]',
+            '[STRAVA_AGENT]'
+        ]
+    
+    def __call__(self, *args, **kwargs):
+        # Call the original print function
+        self.original_print(*args, **kwargs)
+        
+        # Check if any of the printed content contains interesting patterns
+        message = ' '.join(str(arg) for arg in args)
+        
+        if any(pattern in message for pattern in self.interesting_patterns):
+            # Send to frontend if WebSocket is available
+            global _current_websocket
+            if _current_websocket:
+                try:
+                    log_message = {
+                        "log_message": message,
+                        "timestamp": datetime.now().timestamp()
+                    }
+                    asyncio.create_task(_current_websocket.send_text(json.dumps(log_message)))
+                except Exception as e:
+                    print(f"Error sending log to frontend: {e}")
+
+def set_current_websocket(websocket: WebSocket):
+    """Set the current WebSocket for log forwarding"""
+    global _current_websocket
+    _current_websocket = websocket
+
+def clear_current_websocket():
+    """Clear the current WebSocket for log forwarding"""
+    global _current_websocket
+    _current_websocket = None
+
+# Replace the global print function
+print_interceptor = PrintInterceptor()
+import builtins
+builtins.print = print_interceptor
+
+async def send_log_to_frontend(websocket: WebSocket, log_message: str):
+    """Send a log message to the frontend for visualization"""
+    try:
+        message = {
+            "log_message": log_message,
+            "timestamp": datetime.now().timestamp()
+        }
+        await websocket.send_text(json.dumps(message))
+    except Exception as e:
+        print(f"Error sending log message to frontend: {e}")
+
+#
 # ADK Streaming
 #
 
@@ -31,7 +106,7 @@ APP_NAME = "ADK Streaming example"
 session_service = InMemorySessionService()
 
 
-async def start_agent_session(session_id, is_audio=False):
+async def start_agent_session(session_id, is_audio=False, websocket=None):
     """Starts an agent session"""
 
     # Create a Session
@@ -200,8 +275,7 @@ FRONT_END_DIR = Path(__file__).parent.parent / "frontend"
 UPLOAD_DIR = APP_DIR / "uploads"
 PUBLIC_DIR = FRONT_END_DIR / "public"
 
-# Store active WebSocket connections
-websocket_connections = {}
+# websocket_connections is now defined globally for log forwarding
 
 # app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")  # Removed
 
@@ -292,13 +366,17 @@ async def websocket_endpoint(
     # Wait for client connection
     await websocket.accept()
     websocket_connections[session_id] = websocket
+    
+    # Set the current WebSocket for log forwarding
+    set_current_websocket(websocket)
+    
     print(f"Client #{session_id} connected, audio mode: {is_audio}")
     print(f"Active WebSocket connections: {list(websocket_connections.keys())}")
 
     try:
         # Start agent session
         live_events, live_request_queue = await start_agent_session(
-            session_id, is_audio == "true"
+            session_id, is_audio == "true", websocket
         )
 
         # Store live_request_queue with the WebSocket connection
@@ -323,6 +401,10 @@ async def websocket_endpoint(
             del websocket_connections[session_id]
             print(f"WebSocket connection removed for session {session_id}")
             print(f"Remaining WebSocket connections: {list(websocket_connections.keys())}")
+        
+        # Clear the current WebSocket if it's the same one
+        clear_current_websocket()
+            
         print(f"Client #{session_id} disconnected")
 
 @app.get("/api/sessions")
