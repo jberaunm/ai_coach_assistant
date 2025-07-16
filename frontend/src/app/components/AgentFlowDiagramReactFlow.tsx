@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -13,62 +13,245 @@ import 'reactflow/dist/style.css';
 import type { Node as RFNode } from 'reactflow';
 
 const initialNodes: Node[] = [
-  { id: 'root', position: { x: -10, y: 150 }, data: { label: 'Root Agent\nGemini' }, type: 'input', style: { background: '#1976d2', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right },
+  { id: 'root', position: { x: -30, y: 150 }, data: { label: 'Root Agent\nGemini' }, type: 'input', style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right },
   { id: 'planner', position: { x: 260, y: 0 }, data: { label: 'Planner_agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
   { id: 'scheduler', position: { x: 260, y: 150 }, data: { label: 'Scheduler_agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
   { id: 'strava', position: { x: 260, y: 300 }, data: { label: 'Strava_agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'weatherapi', position: { x: 510, y: -20 }, data: { label: 'WeatherAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'calendarapi', position: { x: 510, y: 100 }, data: { label: 'Google CalendarAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'stravaapi', position: { x: 510, y: 300 }, data: { label: 'StravaAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'file_reader', position: { x: 540, y: -20 }, data: { label: 'File_reader tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: 'weatherapi', position: { x: 540, y: 60 }, data: { label: 'WeatherAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'calendarapi_list', position: { x: 540, y: 140 }, data: { label: 'CalendarAPI tool\nlist_events()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'calendarapi_create', position: { x: 540, y: 260 }, data: { label: 'CalendarAPI tool\ncreate_event()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'stravaapi', position: { x: 540, y: 380 }, data: { label: 'StravaAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
 ];
 
 const initialEdges: Edge[] = [
   { id: 'e1', source: 'root', target: 'planner', animated: true, style: { strokeWidth: 2 } },
   { id: 'e2', source: 'root', target: 'scheduler', animated: true, style: { strokeWidth: 2 } },
   { id: 'e3', source: 'root', target: 'strava', animated: true, style: { strokeWidth: 2 } },
-  { id: 'e5', source: 'planner', target: 'weatherapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
-  { id: 'e6', source: 'scheduler', target: 'calendarapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
-  { id: 'e7', source: 'strava', target: 'stravaapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
+  { id: 'e4', source: 'planner', target: 'file_reader', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
+  { id: 'e5', source: 'scheduler', target: 'weatherapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
+  { id: 'e6', source: 'scheduler', target: 'calendarapi_list', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
+  { id: 'e7', source: 'scheduler', target: 'calendarapi_create', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
+  { id: 'e8', source: 'strava', target: 'stravaapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
 ];
 
-export default function AgentFlowDiagramReactFlow() {
+// Log pattern to node mapping
+const logPatternToNodes: { [key: string]: string[] } = {
+  '[FRONTEND TO AGENT]': ['root'],
+  '[PLANNER_AGENT]': ['planner'],
+  '[SCHEDULER_AGENT]': ['scheduler'],
+  '[STRAVA_AGENT]': ['strava'],
+  '[FileReader_tool]': ['file_reader'],
+  '[CalendarAPI_tool_create_event]': ['calendarapi_create'],
+  '[CalendarAPI_tool_list_events]': ['calendarapi_list'],
+  '[WeatherAPI_tool]': ['weatherapi'],
+  '[StravaAPI_tool]': ['stravaapi'],
+
+};
+
+interface AgentFlowDiagramReactFlowProps {
+  websocket?: WebSocket | null;
+}
+
+export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagramReactFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeEdge, setActiveEdge] = useState<string | null>(null);
   const [activeNode, setActiveNode] = useState<string | null>(null);
+  const [lastLogTime, setLastLogTime] = useState<number>(0);
+  const logTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track active agents and tools (items that have started but not finished)
+  const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set());
+  const [activeTools, setActiveTools] = useState<Set<string>>(new Set());
 
-  // Mock live update: animate a task being handed over every 2 seconds
+  // Function to highlight nodes based on log pattern
+  const highlightNodesFromLog = useCallback((logMessage: string) => {
+    console.log('Processing log message:', logMessage);
+    
+    // Check for agent START/FINISH events
+    if (logMessage.includes('START:') || logMessage.includes('FINISH:')) {
+      const agentMatch = logMessage.match(/\[(PLANNER_AGENT|SCHEDULER_AGENT|STRAVA_AGENT)\]/);
+      if (agentMatch) {
+        const agentName = agentMatch[1].toLowerCase().replace('_agent', '');
+        console.log('Agent name extracted:', agentName);
+        
+        if (logMessage.includes('START:')) {
+          setActiveAgents(prev => new Set(prev).add(agentName));
+          
+          // Highlight the agent node with animation
+          setNodes(nds => nds.map(n => ({
+            ...n,
+            style: {
+              ...n.style,
+              boxShadow: n.id === agentName ? '0 0 16px 4px #68da81' : n.style?.boxShadow,
+              zIndex: n.id === agentName ? 10 : n.style?.zIndex || 1,
+            },
+          })));
+          
+          // Animate connecting edges
+          setEdges(eds => eds.map(e => ({
+            ...e,
+            animated: e.source === agentName || e.target === agentName,
+            style: {
+              ...e.style,
+              stroke: (e.source === agentName || e.target === agentName) ? '#EA4335' : (e.style?.stroke || '#1976d2'),
+              strokeWidth: (e.source === agentName || e.target === agentName) ? 4 : 2,
+            },
+          })));
+        } else if (logMessage.includes('FINISH:')) {
+          setActiveAgents(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(agentName);
+            return newSet;
+          });
+          
+          // Remove highlighting from the agent node
+          setNodes(nds => nds.map(n => ({
+            ...n,
+            style: {
+              ...n.style,
+              boxShadow: n.id === agentName ? undefined : n.style?.boxShadow,
+              zIndex: n.id === agentName ? 1 : n.style?.zIndex || 1,
+            },
+          })));
+          
+          // Stop animating connecting edges
+          setEdges(eds => eds.map(e => ({
+            ...e,
+            animated: e.source === agentName || e.target === agentName ? false : e.animated,
+            style: {
+              ...e.style,
+              stroke: (e.source === agentName || e.target === agentName) ? (e.style?.stroke || '#1976d2') : e.style?.stroke,
+              strokeWidth: (e.source === agentName || e.target === agentName) ? 2 : e.style?.strokeWidth,
+            },
+          })));
+          
+          // Clear all tool and root highlighting when an agent finishes
+          setNodes(nds => nds.map(n => ({
+            ...n,
+            style: {
+              ...n.style,
+              boxShadow: (n.id.includes('api') || n.id === 'file_reader' || n.id === 'root') ? undefined : n.style?.boxShadow,
+              zIndex: (n.id.includes('api') || n.id === 'file_reader' || n.id === 'root') ? 1 : n.style?.zIndex || 1,
+            },
+          })));
+          
+          // Reset all tool edges to normal
+          setEdges(eds => eds.map(e => ({
+            ...e,
+            animated: false,
+            style: {
+              ...e.style,
+              stroke: e.style?.stroke || '#1976d2',
+              strokeWidth: 2,
+            },
+          })));
+          
+          setActiveNode(null);
+        }
+      }
+    }
+    
+    // Handle tool events - highlight whenever tool name appears in log
+    const matchingPattern = Object.keys(logPatternToNodes).find(pattern => 
+      logMessage.includes(pattern) && !pattern.includes('_AGENT')
+    );
+
+    if (matchingPattern) {
+      const nodesToHighlight = logPatternToNodes[matchingPattern];
+      
+      // Highlight the nodes
+      setNodes(nds => nds.map(n => ({
+        ...n,
+        style: {
+          ...n.style,
+          boxShadow: nodesToHighlight.includes(n.id) ? '0 0 16px 4px #68da81' : n.style?.boxShadow,
+          zIndex: nodesToHighlight.includes(n.id) ? 10 : n.style?.zIndex || 1,
+        },
+      })));
+
+      // Highlight connecting edges
+      setEdges(eds => eds.map(e => ({
+        ...e,
+        animated: true,
+        style: {
+          ...e.style,
+          stroke: (e.source === nodesToHighlight[0] && e.target === nodesToHighlight[1]) || 
+                  (e.source === nodesToHighlight[1] && e.target === nodesToHighlight[0]) 
+                  ? '#EA4335' : e.style?.stroke,
+          strokeWidth: (e.source === nodesToHighlight[0] && e.target === nodesToHighlight[1]) || 
+                      (e.source === nodesToHighlight[1] && e.target === nodesToHighlight[0]) 
+                      ? 4 : e.style?.strokeWidth || 2,
+        },
+      })));
+
+      // Set active nodes for display
+      setActiveNode(nodesToHighlight.join(', '));
+      setLastLogTime(Date.now());
+    }
+  }, [setNodes, setEdges]);
+
+  // Listen to WebSocket messages for log data
   useEffect(() => {
-    const edgeOrder = ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'];
-    let idx = 0;
-    const interval = setInterval(() => {
-      setActiveEdge(edgeOrder[idx % edgeOrder.length]);
-      setActiveNode(initialEdges.find(e => e.id === edgeOrder[idx % edgeOrder.length])?.target || null);
-      idx++;
-    }, 2000);
-    return () => clearInterval(interval);
+    if (!websocket) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Check if this is a log message from the backend
+        if (data.log_message) {
+          console.log('Processing log message from backend:', data.log_message);
+          highlightNodesFromLog(data.log_message);
+        }
+        
+        // Check for agent responses that might contain log information
+        if (data.mime_type === 'text/plain' && data.data) {
+          const message = data.data;
+          
+          // Look for specific log patterns in the agent response
+          const logPatterns = [
+            '[FRONTEND TO AGENT]',
+            '[FileReader_tool]',
+            '[CalendarAPI_tool_create_event]',
+            '[CalendarAPI_tool_list_events]',
+            '[WeatherAPI_tool]',
+            '[StravaAPI_tool]',
+            '[PLANNER_AGENT]',
+            '[SCHEDULER_AGENT]',
+            '[STRAVA_AGENT]',
+            'START:',
+            'FINISH:'
+          ];
+          
+          for (const pattern of logPatterns) {
+            if (message.includes(pattern)) {
+              highlightNodesFromLog(pattern);
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore parsing errors for non-JSON messages
+      }
+    };
+
+    websocket.addEventListener('message', handleMessage);
+
+    return () => {
+      websocket.removeEventListener('message', handleMessage);
+    };
+  }, [websocket, highlightNodesFromLog]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (logTimeoutRef.current) {
+        clearTimeout(logTimeoutRef.current);
+      }
+    };
   }, []);
-
-  // Highlight active edge and node
-  useEffect(() => {
-    setEdges(eds => eds.map(e => ({
-      ...e,
-      animated: true,
-      style: {
-        ...e.style,
-        stroke: e.id === activeEdge ? '#EA4335' : (e.style?.stroke || '#1976d2'),
-        strokeWidth: e.id === activeEdge ? 4 : 2,
-      },
-    })));
-    setNodes(nds => nds.map(n => ({
-      ...n,
-      style: {
-        ...n.style,
-        boxShadow: n.id === activeNode ? '0 0 16px 4px #EA4335' : undefined,
-        zIndex: n.id === activeNode ? 10 : 1,
-      },
-    })));
-  }, [activeEdge, activeNode, setEdges, setNodes]);
 
   // Node click handler for interactivity
   const onNodeClick = useCallback((event: React.MouseEvent, node: RFNode) => {

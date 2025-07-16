@@ -10,6 +10,7 @@ def list_activities() -> dict:
         dict: Information about Strava activities or error details
     """
     try:
+        print(f"[StravaAPI tool] START: list_activities()")
         # Get access token from environment variable
         access_token = os.getenv('STRAVA_ACCESS_TOKEN')
         if not access_token:
@@ -44,6 +45,7 @@ def list_activities() -> dict:
             }
             formatted_activities.append(formatted_activity)
 
+        print(f"[StravaAPI tool] FINISH: Found {len(formatted_activities)} activity(s)")
         return {
             "status": "success",
             "message": f"Found {len(formatted_activities)} activity(s) for today.",
@@ -51,6 +53,7 @@ def list_activities() -> dict:
         }
 
     except Exception as e:
+        print(f"[StravaAPI tool] FINISH: Error fetching activities")
         return {
             "status": "error",
             "message": f"Error fetching activities: {str(e)}",

@@ -31,7 +31,7 @@ def list_events(
         }
     """
     try:
-        print(f"[Tool - Google Calendar API]: list_events({start_date})") 
+        print(f"[CalendarAPI_tool_list_events]") 
         # Get calendar service
         service = get_calendar_service()
         if not service:

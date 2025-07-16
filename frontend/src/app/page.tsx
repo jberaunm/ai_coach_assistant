@@ -146,7 +146,7 @@ export default function Home() {
           </div>
           <div className="stat-card agent-flow-card">
             <h1 style={{ marginBottom: 12 }}>AI Agent Flow</h1>
-            <AgentFlowDiagramReactFlow />
+            <AgentFlowDiagramReactFlow websocket={websocket} />
           </div>
         </div>
       </div>
