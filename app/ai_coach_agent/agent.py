@@ -23,12 +23,13 @@ from .tools import (
     list_events,
     list_activities,
     get_weather_forecast,
-    read_training_plan,
+    file_reader,
     write_chromaDB,
     get_session_by_date,
     update_sessions_calendar_by_date,
     update_sessions_weather_by_date,
-    update_sessions_time_scheduled_by_date
+    update_sessions_time_scheduled_by_date,
+    agent_log
 )
 
 planner_agent = LlmAgent(
@@ -39,9 +40,17 @@ planner_agent = LlmAgent(
         "Agent that parses marathon training plans, and adjusts if a seesion is missed."
     ),
     instruction=f"""
-    You are a planner agent, you can understand the training plan given by the user and parse it. You will use the tool `read_training_plan` to access the content.
+    You are a planner agent, you can understand the training plan given by the user and parse it. You will use the tool `file_reader` to access the content.
     Once plan is parsed, you will insert the data into the ChromaDB using the tool `write_chromaDB`
     You can also provide Session query operations to the ChromaDB.
+
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution:
+    1. When you start processing: `agent_log("planner_agent", "start", "Starting to process training plan")`
+    2. When you finish: `agent_log("planner_agent", "finish", "Successfully processed training plan")`
+    3. If you encounter any errors: `agent_log("planner_agent", "error", "Error occurred: [describe the error]")`
+    
+    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
 
     ## Today's date
     Today's date is {get_current_time()}.
@@ -89,7 +98,7 @@ planner_agent = LlmAgent(
     3. The path should point to a file in the uploads directory
     4. If you cannot read the file, report the specific error and ask the user to try uploading again
     """,
-    tools=[read_training_plan,write_chromaDB],
+    tools=[file_reader, write_chromaDB, agent_log],
 )
 
 scheduler_agent = LlmAgent(
@@ -98,6 +107,14 @@ scheduler_agent = LlmAgent(
     description="Schedules training sessions based on calendar and weather data.",
     instruction=f"""
     You are a scheduler agent that helps users find the best time for their training sessions.
+
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution when starting and finishing:
+    1. When you start processing: `agent_log("scheduler_agent", "start", "Starting to schedule training session")`
+    2. When you finish: `agent_log("scheduler_agent", "finish", "Successfully scheduled training session")`
+    3. If you encounter any errors: `agent_log("scheduler_agent", "error", "Error occurred: [describe the error]")`
+    
+    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
 
     ## Today's date
     Today's date is {get_current_time()}.
@@ -108,7 +125,7 @@ scheduler_agent = LlmAgent(
     1. **Get training session**: Use `get_session_by_date` with the requested date
     2. **Get calendar events**: Use `list_events` with start_date=requested_date
     3. **Check for existing AI training session**: Look through the calendar events from step 2. If any event has a title ending with "AI Coach Session", then a training session has already been scheduled for this date.
-    4. **If AI session exists**: Skip to step 8 and inform the user that the session has already been scheduled.
+    4. **If AI session exists**: Inform the user that the session has already been scheduled and proceed to step 6.
     5. **If no AI session exists**: Continue with the following steps:
        a. **Get weather forecast**: Use `get_weather_forecast` with date=requested_date
        b. **Find the best time to do the training session**: based on calendar events and weather conditions, create a time_scheduled structure with start and end time, temperature, and weather description.
@@ -122,7 +139,7 @@ scheduler_agent = LlmAgent(
        f. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
     6. **Present information**: Show calendar events and information about the training session
 
-    **IMPORTANT**: You MUST execute ALL steps in order. If an AI training session already exists, skip the creation steps and inform the user.
+    **IMPORTANT**: You MUST execute ALL steps in order. If an AI training session already exists, skip the creation steps but still inform the user and complete the workflow.
 
     ## Response Format
     Always respond with:
@@ -144,6 +161,7 @@ scheduler_agent = LlmAgent(
       - Update weather: `update_sessions_weather_by_date("2025-07-09", weather_data)`
       - Update time_scheduled: `update_sessions_time_scheduled_by_date("2025-07-09", time_scheduled_data)`
       - Respond: "Your calendar shows: Meeting 1 from 10:00 to 11:00. I've scheduled your 'Easy Run 10k' from 12:00 to 13:00, as it will be Cloudy with 8°C."
+    - In both cases, complete the workflow and provide the response.
 
     ## Time Scheduled Data Structure
     When creating time_scheduled data, use this exact structure:
@@ -172,7 +190,8 @@ scheduler_agent = LlmAgent(
            get_session_by_date,
            update_sessions_calendar_by_date,
            update_sessions_weather_by_date,
-           update_sessions_time_scheduled_by_date]
+           update_sessions_time_scheduled_by_date,
+           agent_log]
 )
 
 strava_agent = LlmAgent(
@@ -187,8 +206,16 @@ strava_agent = LlmAgent(
         "## Strava operations"
         "You can perform activities operations directly using these tools:"
         "- `strava_tools3`: Show today's activities from your Strava account"
+        
+        "## Logging Instructions"
+        "You MUST use the `agent_log` tool to log your execution:"
+        "1. When you start processing: `agent_log(\"strava_agent\", \"start\", \"Starting to get Strava activities\")`"
+        "2. When you finish: `agent_log(\"strava_agent\", \"finish\", \"Successfully retrieved Strava activities\")`"
+        "3. If you encounter any errors: `agent_log(\"strava_agent\", \"error\", \"Error occurred: [describe the error]\")`"
+        
+        "**CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure."
     ),
-    tools=[list_activities],
+    tools=[list_activities, agent_log],
 )
 
 root_agent = Agent(

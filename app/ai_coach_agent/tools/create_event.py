@@ -25,7 +25,7 @@ def create_event(
         dict: Information about the created event or error details
     """
     try:
-        print(f"[Tool - Google Calendar API]: create_event({date},{start_time},{end_time},{title})")
+        print(f"[CalendarAPI_tool_create_event]")
         # Get calendar service
         service = get_calendar_service()
         if not service:
