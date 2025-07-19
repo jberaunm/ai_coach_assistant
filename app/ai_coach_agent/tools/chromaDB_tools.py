@@ -20,6 +20,7 @@ class TimeScheduled(BaseModel):
     tempC: str
     desc: str
     status: str
+    actual_start: Optional[str] = None  # "14:30" - when session actually started (time only)
 
 class Metadata(BaseModel):
     date: str                    # "2025-06-17"
@@ -194,16 +195,26 @@ def update_sessions_weather_by_date(date: str, weather_data: dict):
             elif isinstance(weather_data, list):
                 hours_data = weather_data
         
-        # Create the expected weather structure
+        # Filter hours to only include specific times: 06:00, 09:00, 12:00, 15:00, 18:00
+        target_hours = ["06:00", "09:00", "12:00", "15:00", "18:00"]
+        filtered_hours = []
+        
+        for hour_data in hours_data:
+            if isinstance(hour_data, dict) and "time" in hour_data:
+                # Check if the time matches any of our target hours
+                if hour_data["time"] in target_hours:
+                    filtered_hours.append(hour_data)
+        
+        # Create the expected weather structure with filtered hours
         weather_structure = {
-            "hours": hours_data
+            "hours": filtered_hours
         }
         
         # Update each session's weather metadata
         for i, session_id in enumerate(results['ids']):
             current_metadata = results['metadatas'][i]
             
-            # Update weather data with the simplified structure
+            # Update weather data with the filtered structure
             current_metadata['weather'] = json.dumps(weather_structure)
             
             # Update the session
@@ -214,7 +225,7 @@ def update_sessions_weather_by_date(date: str, weather_data: dict):
         
         return {
             "status": "success",
-            "message": f"Successfully updated weather for {len(results['ids'])} sessions on {date}"
+            "message": f"Successfully updated weather for {len(results['ids'])} sessions on {date} with {len(filtered_hours)} filtered hours"
         }
         
     except Exception as e:
@@ -285,4 +296,60 @@ def update_sessions_time_scheduled_by_date(date: str, time_scheduled_data: list)
         return {
             "status": "error",
             "message": f"Error updating sessions time_scheduled by date: {str(e)}"
+        }
+
+def mark_session_completed_by_date(date: str, actual_start: Optional[str] = None):
+    """Mark the session as completed and optionally update the actual start time in time_scheduled.
+    
+    Args:
+        date: The date in YYYY-MM-DD format
+        actual_start: Optional actual start time in HH:MM format (e.g., "14:30")
+        
+    Returns:
+        Dict with status and message
+    """
+    try:
+        # Get the session for the specified date (only one session per day)
+        results = chroma_service.collection.get(where={"date": date})
+        
+        if not results['ids']:
+            return {
+                "status": "error",
+                "message": f"No session found for date: {date}"
+            }
+        
+        # Get the single session (there's only one per day)
+        session_id = results['ids'][0]
+        current_metadata = results['metadatas'][0]
+        
+        # Mark session as completed
+        current_metadata['session_completed'] = True
+        
+        # Update actual start time in time_scheduled if provided
+        if actual_start and 'time_scheduled' in current_metadata:
+            try:
+                time_scheduled_data = json.loads(current_metadata['time_scheduled'])
+                if isinstance(time_scheduled_data, list) and len(time_scheduled_data) > 0:
+                    # Update the first time_scheduled item with actual_start
+                    time_scheduled_data[0]['actual_start'] = actual_start
+                    current_metadata['time_scheduled'] = json.dumps(time_scheduled_data)
+            except (json.JSONDecodeError, KeyError, IndexError) as e:
+                print(f"Warning: Could not update time_scheduled with actual_start: {e}")
+        
+        # Update the session
+        chroma_service.collection.update(
+            ids=[session_id],
+            metadatas=[current_metadata]
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Successfully marked session as completed on {date}" + 
+                      (f" with actual start time: {actual_start}" if actual_start else "")
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error marking session as completed: {str(e)}"
         }
