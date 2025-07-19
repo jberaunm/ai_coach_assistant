@@ -9,10 +9,10 @@ from .create_event import create_event
 from .delete_event import delete_event
 from .edit_event import edit_event
 from .list_events import list_events
-from .strava_tools3 import list_activities
+from .strava_list_activities import list_strava_activities
 from .get_weather import get_weather_forecast
 from .training_plan_parser import file_reader
-from .chromaDB_tools import write_chromaDB,get_session_by_date,update_sessions_calendar_by_date,update_sessions_weather_by_date,update_sessions_time_scheduled_by_date
+from .chromaDB_tools import write_chromaDB,get_session_by_date,update_sessions_calendar_by_date,update_sessions_weather_by_date,update_sessions_time_scheduled_by_date,mark_session_completed_by_date
 from .agent_logger import agent_log
 
 __all__ = [
@@ -21,7 +21,7 @@ __all__ = [
     "edit_event",
     "list_events",
     "get_current_time",
-    "list_activities",
+    "list_strava_activities",
     "get_weather_forecast",
     "file_reader",
     "write_chromaDB",
@@ -29,5 +29,6 @@ __all__ = [
     "update_sessions_calendar_by_date",
     "update_sessions_weather_by_date",
     "update_sessions_time_scheduled_by_date",
+    "mark_session_completed_by_date",
     "agent_log"
 ]

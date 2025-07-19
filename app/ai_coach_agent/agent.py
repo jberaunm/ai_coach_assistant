@@ -21,7 +21,7 @@ from .tools import (
     edit_event,
     get_current_time,
     list_events,
-    list_activities,
+    list_strava_activities,
     get_weather_forecast,
     file_reader,
     write_chromaDB,
@@ -29,6 +29,7 @@ from .tools import (
     update_sessions_calendar_by_date,
     update_sessions_weather_by_date,
     update_sessions_time_scheduled_by_date,
+    mark_session_completed_by_date,
     agent_log
 )
 
@@ -198,24 +199,32 @@ strava_agent = LlmAgent(
     name="strava_agent",
     model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
     description=(
-        "Agent that list activities from Strava"
+        "Agent that list activities from Strava and automatically marks sessions as completed when activities are found"
     ),
-    instruction=(
-        "You are a strava agent, a helpful assistant that can perform various tasks "
-        "helping with Strava operations."
-        "## Strava operations"
-        "You can perform activities operations directly using these tools:"
-        "- `strava_tools3`: Show today's activities from your Strava account"
+    instruction=f"""
+    You are a strava agent, a helpful assistant that can perform various tasks helping with Strava operations.
+    
+    ## Today's date
+    Today's date is {get_current_time()}.
+
+    ## Main Workflow: "List my strava activities for [date]?"
+    When asked about a strava activities for a specific date, follow this exact process:
+
+    1. **Get strava activities**: Use `list_strava_activities` with the requested date.
+    2. **Check if activities were found**: If the response contains activities (events array is not empty):
+       a. Extract the `actual_start` from the response
+       b. Use `mark_session_completed_by_date` with the requested date and actual_start to mark the session as completed
+       c. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
         
-        "## Logging Instructions"
-        "You MUST use the `agent_log` tool to log your execution:"
-        "1. When you start processing: `agent_log(\"strava_agent\", \"start\", \"Starting to get Strava activities\")`"
-        "2. When you finish: `agent_log(\"strava_agent\", \"finish\", \"Successfully retrieved Strava activities\")`"
-        "3. If you encounter any errors: `agent_log(\"strava_agent\", \"error\", \"Error occurred: [describe the error]\")`"
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution:
+    1. When you start processing: `agent_log(\"strava_agent\", \"start\", \"Starting to get Strava activities\")`
+    2. When you finish: `agent_log(\"strava_agent\", \"finish\", \"Successfully retrieved Strava activities\")`
+    3. If you encounter any errors: `agent_log(\"strava_agent\", \"error\", \"Error occurred: [describe the error]\")`
         
-        "**CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure."
-    ),
-    tools=[list_activities, agent_log],
+    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
+    """,
+    tools=[list_strava_activities, mark_session_completed_by_date, agent_log],
 )
 
 root_agent = Agent(
