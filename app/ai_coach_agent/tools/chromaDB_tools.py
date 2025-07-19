@@ -39,6 +39,32 @@ class SessionData(BaseModel):
     embedding: List[float]
     metadata: Metadata
 
+# New models for activity data with streams
+class ActivityDataPoint(BaseModel):
+    index: int
+    distance_meters: Optional[float] = None
+    velocity_ms: Optional[float] = None
+    heartrate_bpm: Optional[int] = None
+    altitude_meters: Optional[float] = None
+    cadence: Optional[int] = None
+
+class ActivityMetadata(BaseModel):
+    activity_id: int
+    calendar: Optional[Dict[str, List[CalendarEvent]]] = None
+    date: str
+    day: str
+    distance: str
+    notes: str = ""
+    session_completed: bool = False
+    time_scheduled: Optional[List[TimeScheduled]] = None
+    type: str
+    weather: Optional[Dict[str, List[WeatherHour]]] = None
+
+class ActivityData(BaseModel):
+    session: str
+    metadata: ActivityMetadata
+    data_points: Optional[List[ActivityDataPoint]] = None
+
 def write_chromaDB(sessions: List[Dict[str, Any]]):
     """Store training plan sessions in ChromaDB.
     
@@ -298,11 +324,12 @@ def update_sessions_time_scheduled_by_date(date: str, time_scheduled_data: list)
             "message": f"Error updating sessions time_scheduled by date: {str(e)}"
         }
 
-def mark_session_completed_by_date(date: str, actual_start: Optional[str] = None):
+def mark_session_completed_by_date(date: str, id: int, actual_start: Optional[str] = None):
     """Mark the session as completed and optionally update the actual start time in time_scheduled.
     
     Args:
         date: The date in YYYY-MM-DD format
+        id: id of the session
         actual_start: Optional actual start time in HH:MM format (e.g., "14:30")
         
     Returns:
@@ -324,6 +351,9 @@ def mark_session_completed_by_date(date: str, actual_start: Optional[str] = None
         
         # Mark session as completed
         current_metadata['session_completed'] = True
+
+        # Link the session to the activity
+        current_metadata['activity_id'] = id
         
         # Update actual start time in time_scheduled if provided
         if actual_start and 'time_scheduled' in current_metadata:
@@ -352,4 +382,125 @@ def mark_session_completed_by_date(date: str, actual_start: Optional[str] = None
         return {
             "status": "error",
             "message": f"Error marking session as completed: {str(e)}"
+        }
+
+def write_activity_data(activity_data: Dict[str, Any]):
+    """Store activity data with streams in ChromaDB.
+    
+    Args:
+        activity_data: Dictionary containing activity data with structure:
+            {
+                "activity_id": int,
+                "metadata": {
+                    "type": str,
+                    "name": str,
+                    "distance": str,
+                    "duration": str,
+                    "start_date": str,
+                    "actual_start": str,
+                    "pace": str,
+                    "total_distance_meters": float,
+                    "total_data_points": int,
+                    "resolution": str,
+                    "series_type": str
+                },
+                "data_points": list
+            }
+        
+    Returns:
+        Dict with status and message
+    """
+    try:
+        # Extract activity_id for unique identification
+        activity_id = activity_data.get("activity_id")
+        print(f"Writing activity data: {activity_id}")
+        if not activity_id:
+            return {
+                "status": "error",
+                "message": "activity_id is required",
+                "activity_id": None
+            }
+        
+        # Convert activity_id to string for ChromaDB
+        activity_id_str = str(activity_id)
+        
+        # Prepare the document content (use activity name as document)
+        metadata = activity_data.get("metadata", {})
+        document_text = metadata.get("name", f"Activity {activity_id}")
+        
+        # Prepare metadata for ChromaDB
+        metadata_for_storage = metadata.copy()
+        
+        # Add data_points if present
+        data_points = activity_data.get("data_points")
+        if data_points:
+            metadata_for_storage["data_points"] = json.dumps(data_points)
+        
+        # Store in ChromaDB using the activity_id as the unique identifier
+        chroma_service.collection.add(
+            documents=[document_text],
+            metadatas=[metadata_for_storage],
+            ids=[activity_id_str]
+        )
+        print(f"Successfully stored data for activity_id: {activity_id}")
+        return {
+            "status": "success",
+            "message": f"Successfully stored activity data for activity_id: {activity_id}",
+            "activity_id": activity_id
+        }
+            
+    except Exception as e:
+        print(f"Error storing activity data: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Error storing activity data: {str(e)}",
+            "activity_id": None
+        }
+
+def get_activity_by_id(activity_id: int):
+    """
+    Retrieves activity data by activity_id from the database.
+    
+    Args:
+        activity_id: The Strava activity ID
+        
+    Returns:
+        dict: The activity data or a message if none found.
+    """
+    try:
+        activity_id_str = str(activity_id)
+        results = chroma_service.collection.get(ids=[activity_id_str])
+        
+        if not results['ids']:
+            return {
+                "status": "error",
+                "message": f"No activity found with ID: {activity_id}",
+                "activity_data": None
+            }
+        
+        # Reconstruct the activity data structure
+        document = results['documents'][0]
+        metadata = results['metadatas'][0]
+        
+        # Parse JSON strings back to objects
+        if metadata.get("data_points"):
+            metadata["data_points"] = json.loads(metadata["data_points"])
+        
+        activity_data = {
+            "activity_id": activity_id,
+            "metadata": metadata,
+            "data_points": metadata.get("data_points", [])
+        }
+        
+        return {
+            "status": "success",
+            "message": f"Found activity data for ID: {activity_id}",
+            "activity_data": activity_data
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error retrieving activity data: {str(e)}",
+            "activity_data": None
         }

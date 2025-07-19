@@ -460,5 +460,56 @@ class ChromaService:
                 "message": f"Error listing sessions: {str(e)}"
             }
 
+    def get_activity_by_id(self, activity_id: int) -> Dict:
+        """
+        Retrieves activity data by activity_id from the database.
+        
+        Args:
+            activity_id: The Strava activity ID
+            
+        Returns:
+            Dict containing:
+                - status: "success" or "error"
+                - message: Description of the result
+                - activity_data: The activity data or None if not found
+        """
+        try:
+            activity_id_str = str(activity_id)
+            results = self.collection.get(ids=[activity_id_str])
+            
+            if not results['ids']:
+                return {
+                    "status": "error",
+                    "message": f"No activity found with ID: {activity_id}",
+                    "activity_data": None
+                }
+            
+            # Reconstruct the activity data structure
+            document = results['documents'][0]
+            metadata = results['metadatas'][0]
+            
+            # Parse JSON strings back to objects
+            if metadata.get("data_points"):
+                metadata["data_points"] = json.loads(metadata["data_points"])
+            
+            activity_data = {
+                "activity_id": activity_id,
+                "metadata": metadata,
+                "data_points": metadata.get("data_points", [])
+            }
+            
+            return {
+                "status": "success",
+                "message": f"Found activity data for ID: {activity_id}",
+                "activity_data": activity_data
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error retrieving activity data: {str(e)}",
+                "activity_data": None
+            }
+
 # Create a singleton instance
 chroma_service = ChromaService() 

@@ -20,6 +20,7 @@ from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from ai_coach_agent.agent import root_agent
 from db.chroma_service import chroma_service
+
 from fastapi.middleware.cors import CORSMiddleware
 
 #
@@ -453,3 +454,16 @@ async def get_session_by_date(date: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
+
+@app.get("/api/activity/{activity_id}")
+async def get_activity_by_id_endpoint(activity_id: int):
+    """Get activity data for a specific activity_id."""
+    try:
+        result = chroma_service.get_activity_by_id(activity_id)
+        if result["status"] == "error":
+            raise HTTPException(status_code=404, detail=result["message"])
+        return result["activity_data"]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving activity: {str(e)}")
