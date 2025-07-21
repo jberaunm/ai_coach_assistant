@@ -31,6 +31,7 @@ from .tools import (
     update_sessions_time_scheduled_by_date,
     mark_session_completed_by_date,
     write_activity_data,
+    plot_running_chart,
     agent_log
 )
 
@@ -284,6 +285,31 @@ strava_agent = LlmAgent(
            write_activity_data],
 )
 
+classifier_agent = LlmAgent(
+    name="classifier_agent",
+    model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
+    description=(
+        "Agent that creates a running chart from a Strava activity"
+    ),
+    instruction=f"""
+    You are a classifier agent, a helpful assistant that can perform various tasks helping with Strava operations.
+
+    ## Main Workflow: "Create a running chart for the activity [activity_id]"
+    When asked about a running chart for a specific activity, follow this exact process:
+    1. **Create a running chart**: Use `plot_running_chart` with the activity_id
+    2. **Check if the chart was created**: If the response contains a chart (status is "success"):
+
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution:
+    1. When you start processing: `agent_log("classifier_agent", "start", "Starting to create chart")`
+    2. When you finish: `agent_log("classifier_agent", "finish", "Successfully created chart")`
+    3. If you encounter any errors: `agent_log("classifier_agent", "error", "Error occurred: [describe the error]")`
+
+    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
+    """,
+    tools=[plot_running_chart, agent_log],
+)
+
 root_agent = Agent(
     name="ai_coach_agent",
     model="gemini-2.0-flash-exp",
@@ -305,6 +331,9 @@ root_agent = Agent(
     ## Strava operations
     You can perform Strava operations through routing to the `strava_agent`.
 
+    ## Creating chart operation
+    You can create charts through routing to the `classifier_agent`.
+
     ## Training Plan Operations
     When a user upload their training plan, inmediately delegate to the `planner_agent` including the file path
     If you are asked about an specific session planed for either today or other days, delegate to the `scheduler_agent`.
@@ -321,5 +350,6 @@ root_agent = Agent(
         AgentTool(agent=scheduler_agent),
         AgentTool(agent=strava_agent),
         AgentTool(agent=planner_agent),
+        AgentTool(agent=classifier_agent),
     ]
 )
