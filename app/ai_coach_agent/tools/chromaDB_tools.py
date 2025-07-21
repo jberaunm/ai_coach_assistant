@@ -338,7 +338,7 @@ def mark_session_completed_by_date(date: str, id: int, actual_start: Optional[st
     try:
         # Get the session for the specified date (only one session per day)
         results = chroma_service.collection.get(where={"date": date})
-        
+        print(f"Marking session status for {date} and linking to activity {id}")
         if not results['ids']:
             return {
                 "status": "error",
@@ -372,6 +372,7 @@ def mark_session_completed_by_date(date: str, id: int, actual_start: Optional[st
             metadatas=[current_metadata]
         )
         
+        print(f"Updated successfully session status for {date} and linking to activity {id}")
         return {
             "status": "success",
             "message": f"Successfully marked session as completed on {date}" + 
