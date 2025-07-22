@@ -249,7 +249,15 @@ async def client_to_agent_messaging(
                 types.Blob(data=decoded_data, mime_type=mime_type)
             )
             print(f"[FRONTEND TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
-
+        elif mime_type.startswith("image/"):
+            # Send image data as binary
+            decoded_data = base64.b64decode(data)
+            
+            # Send the image data as a blob
+            live_request_queue.send_realtime(
+                types.Blob(data=decoded_data, mime_type=mime_type)
+            )
+            print(f"[FRONTEND TO AGENT]: {mime_type}: {len(decoded_data)} bytes")
         else:
             raise ValueError(f"Mime type not supported: {mime_type}")
 
@@ -467,3 +475,36 @@ async def get_activity_by_id_endpoint(activity_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving activity: {str(e)}")
+
+@app.post("/api/analyze-chart")
+async def analyze_chart_endpoint(image_path: str = Query(...), session_id: str = Query(...)):
+    """Analyze a running chart image directly from the backend."""
+    try:
+        print(f"Received chart analysis request for session {session_id}, image: {image_path}")
+        
+        # Check if WebSocket connection exists for this session
+        if session_id not in websocket_connections:
+            raise HTTPException(status_code=404, detail="No active session found")
+        
+        websocket = websocket_connections[session_id]
+        if not hasattr(websocket, 'live_request_queue'):
+            raise HTTPException(status_code=404, detail="No active agent session found")
+        
+        # Send the analysis request to the agent
+        analysis_request = f"Analyze this chart: {image_path}"
+        content = types.Content(role="user", parts=[types.Part.from_text(text=analysis_request)])
+        websocket.live_request_queue.send_content(content=content)
+        
+        print(f"Chart analysis request sent to agent: {analysis_request}")
+        
+        return {
+            "status": "success",
+            "message": "Chart analysis request sent to agent",
+            "image_path": image_path
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in analyze_chart_endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing chart: {str(e)}")

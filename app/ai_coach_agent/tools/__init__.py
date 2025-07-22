@@ -10,6 +10,7 @@ from .list_events import list_events
 from .strava_list_activities import get_activity_with_streams
 from .get_weather import get_weather_forecast
 from .training_plan_parser import file_reader
+from .image_reader import read_image_as_binary
 from .chromaDB_tools import write_chromaDB,get_session_by_date,update_sessions_calendar_by_date,update_sessions_weather_by_date,update_sessions_time_scheduled_by_date,mark_session_completed_by_date,write_activity_data
 from .plot_running_chart import plot_running_chart
 from .agent_logger import agent_log
@@ -23,6 +24,7 @@ __all__ = [
     "get_activity_with_streams",
     "get_weather_forecast",
     "file_reader",
+    "read_image_as_binary",
     "write_chromaDB",
     "get_session_by_date",
     "update_sessions_calendar_by_date",

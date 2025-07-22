@@ -24,6 +24,7 @@ from .tools import (
     get_activity_with_streams,
     get_weather_forecast,
     file_reader,
+    read_image_as_binary,
     write_chromaDB,
     get_session_by_date,
     update_sessions_calendar_by_date,
@@ -310,6 +311,76 @@ classifier_agent = LlmAgent(
     tools=[plot_running_chart, agent_log],
 )
 
+chart_agent = LlmAgent(
+    name="chart_agent",
+    model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
+    description=(
+        "Agent that creates and analyzes running charts from Strava activities"
+    ),
+    instruction=f"""
+    You are a chart agent that can create running charts from Strava activities and provide analysis.
+    
+    ## Multimodal Capabilities
+    You are using a vision-capable model (mistral-small-latest) that can directly analyze images.
+    When you receive an image path, you can access and analyze the image file directly.
+    
+    ## Main Workflows:
+    
+    ### 1. Creating Charts: "Create a running chart for activity [activity_id]"
+    When asked to create a running chart for a specific activity:
+    1. Use `plot_running_chart` with the activity_id
+    2. The tool will create a chart showing heart rate, altitude, and pace data
+    3. The chart will be saved as an image file
+    
+    ### 2. Analyzing Charts: "Analyze this chart: [image_path]"
+    When provided with an image path of a running chart (e.g., "Analyze this chart: /app/uploads/running_chart_activity_15194488126.png"):
+    1. Use the `read_image_as_binary` tool to verify the image file exists and get the correct path
+    2. The tool will return a confirmation message with the actual file path
+    3. You can then analyze the image directly using your multimodal capabilities
+    4. Analyze the visual data in the chart including heart rate, pace, and altitude graphs
+    5. Provide detailed insights about the running performance
+    6. Look for patterns, trends, and anomalies in the data
+    
+    ## Chart Analysis Capabilities
+    When analyzing running charts, examine:
+    - Heart rate patterns (min, avg, max values and trends)
+    - Pace consistency and variations throughout the run
+    - Altitude changes and their impact on performance
+    - Performance trends and any notable segments
+    - Any anomalies or interesting patterns in the data
+    - Overall run quality and efficiency
+    
+    ## Input Formats
+    You can analyze charts from:
+    - Local file paths (e.g., "/app/uploads/running_chart.png") - use read_image_as_binary tool to verify and get path
+    - Direct image data provided in the conversation
+    - Binary image data (which you can see and analyze directly)
+    
+    ## Image Analysis Instructions
+    When you receive an image analysis request:
+    1. If an image path is provided (e.g., "/app/uploads/running_chart_activity_15194488126.png"), use the `read_image_as_binary` tool to verify the file exists
+    2. The tool will return a confirmation message with the actual file path
+    3. You can then analyze the image directly using your multimodal capabilities
+    4. Analyze the visual data in the chart including heart rate, pace, and altitude graphs
+    5. Provide specific insights about the running performance
+    6. Look for patterns, trends, and any notable segments in the data
+    
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution:
+    1. When you start processing: `agent_log("chart_agent", "start", "Starting chart operation")`
+    2. When you finish: `agent_log("chart_agent", "finish", "Successfully completed chart operation")`
+    3. If you encounter any errors: `agent_log("chart_agent", "error", "Error occurred: [describe the error]")`
+    
+    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
+    
+    ## Response Format
+    - For chart analysis: Provide detailed insights about the running performance shown in the chart, including specific observations about heart rate, pace, and altitude patterns
+    - Be specific about the data you can see in the chart
+    - When analyzing images, describe the visual elements, trends, and patterns you observe
+    """,
+    tools=[read_image_as_binary, agent_log],
+)
+
 root_agent = Agent(
     name="ai_coach_agent",
     model="gemini-2.0-flash-exp",
@@ -331,8 +402,21 @@ root_agent = Agent(
     ## Strava operations
     You can perform Strava operations through routing to the `strava_agent`.
 
-    ## Creating chart operation
+    ## Chart operations
     You can create charts through routing to the `classifier_agent`.
+    You can analyze charts (both images and text) through routing to the `chart_agent`.
+
+    ## Image Analysis
+    When a user asks to analyze an image or chart (e.g., "Analyze this chart: /app/uploads/running_chart_activity_15194488126.png"), 
+    you MUST immediately delegate to the `chart_agent` and pass the complete request including the image path.
+    DO NOT try to analyze the image yourself - the chart_agent has multimodal capabilities and can directly see and analyze images.
+    Simply route the request: "Please analyze this chart: /app/uploads/running_chart_activity_15194488126.png"
+    
+    **CRITICAL**: Look for these exact patterns and route to chart_agent:
+    - "Analyze this chart:"
+    - "Analyze this image:"
+    - "Look at this chart:"
+    - Any request containing "/app/uploads/" and asking for analysis
 
     ## Training Plan Operations
     When a user upload their training plan, inmediately delegate to the `planner_agent` including the file path
@@ -345,11 +429,15 @@ root_agent = Agent(
     - Be super concise in your responses and only return the information requested (not extra information).
     - NEVER show the raw response from a tool_outputs. Instead, use the information to answer the question.
     - NEVER show ```tool_outputs...``` in your response.
+    - For image analysis requests, you MUST always route to the chart_agent which has multimodal capabilities and is able to read the image.
+    - NEVER try to analyze images yourself - you don't have multimodal capabilities.
+    - If you see "Analyze this chart:" or similar image analysis requests, immediately delegate to chart_agent.
     """,
     tools=[
         AgentTool(agent=scheduler_agent),
         AgentTool(agent=strava_agent),
         AgentTool(agent=planner_agent),
         AgentTool(agent=classifier_agent),
+        AgentTool(agent=chart_agent),
     ]
 )

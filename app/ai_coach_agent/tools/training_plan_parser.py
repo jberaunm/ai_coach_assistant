@@ -24,12 +24,12 @@ def file_reader(file_path: str) -> str:
         
         if mime_type and mime_type.startswith('text'):
             # Try to read as text
-            with open(normalized_path, 'r', encoding='utf-8', errors='replace') as f:
+            with open(actual_path, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
             return content
         else:
             # Binary file: return base64 string
-            with open(normalized_path, 'rb') as f:
+            with open(actual_path, 'rb') as f:
                 encoded = base64.b64encode(f.read()).decode('utf-8')
                 content = f"[BINARY FILE - base64 encoded]\n{encoded}"
             return content
