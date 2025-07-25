@@ -386,7 +386,7 @@ def mark_session_completed_by_date(date: str, id: int, actual_start: Optional[st
         }
 
 def write_activity_data(activity_data: Dict[str, Any]):
-    """Store activity data with streams in ChromaDB.
+    """Store activity data with combined laps and streams in ChromaDB.
     
     Args:
         activity_data: Dictionary containing activity data with structure:
@@ -401,11 +401,18 @@ def write_activity_data(activity_data: Dict[str, Any]):
                     "actual_start": str,
                     "pace": str,
                     "total_distance_meters": float,
-                    "total_data_points": int,
+                    "total_laps": int,
+                    "total_stream_points": int,
                     "resolution": str,
-                    "series_type": str
+                    "series_type": str,
+                    "available_streams": list,
+                    "has_laps": bool,
+                    "has_streams": bool
                 },
-                "data_points": list
+                "data_points": {
+                    "laps": list,
+                    "streams": list
+                }
             }
         
     Returns:
@@ -429,15 +436,33 @@ def write_activity_data(activity_data: Dict[str, Any]):
         metadata = activity_data.get("metadata", {})
         document_text = metadata.get("name", f"Activity {activity_id}")
         
-        # Prepare metadata for ChromaDB
-        metadata_for_storage = metadata.copy()
+        # Prepare metadata for ChromaDB - convert complex types to JSON strings
+        # BUT exclude data_points from metadata to avoid duplication
+        metadata_for_storage = {}
+        for key, value in metadata.items():
+            if key == "data_points":
+                # Skip data_points - it will be stored separately
+                continue
+            elif isinstance(value, (list, dict)):
+                # Convert lists and dicts to JSON strings for ChromaDB compatibility
+                metadata_for_storage[key] = json.dumps(value)
+            else:
+                # Keep primitive types as-is
+                metadata_for_storage[key] = value
         
-        # Add data_points if present
+        # Add data_points as a separate field (not in metadata)
         data_points = activity_data.get("data_points")
         if data_points:
+            # Store the complete data_points structure with both laps and streams
             metadata_for_storage["data_points"] = json.dumps(data_points)
+            
+            # Also store individual counts for easy access
+            if isinstance(data_points, dict):
+                metadata_for_storage["laps_count"] = len(data_points.get("laps", []))
+                metadata_for_storage["streams_count"] = len(data_points.get("streams", []))
         
         # Store in ChromaDB using the activity_id as the unique identifier
+        # Store data_points separately from metadata to avoid duplication
         chroma_service.collection.add(
             documents=[document_text],
             metadatas=[metadata_for_storage],
@@ -483,14 +508,33 @@ def get_activity_by_id(activity_id: int):
         document = results['documents'][0]
         metadata = results['metadatas'][0]
         
-        # Parse JSON strings back to objects
-        if metadata.get("data_points"):
-            metadata["data_points"] = json.loads(metadata["data_points"])
+        # Parse JSON strings back to their original types
+        parsed_metadata = {}
+        data_points = {}
+        
+        for key, value in metadata.items():
+            if key == "data_points" and value:
+                # Parse data_points back to dict and store separately
+                # DO NOT add to parsed_metadata to avoid duplication
+                data_points = json.loads(value)
+            elif isinstance(value, str) and (value.startswith('[') or value.startswith('{')):
+                # Try to parse other JSON strings (lists and dicts)
+                try:
+                    parsed_metadata[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, keep as string
+                    parsed_metadata[key] = value
+            else:
+                # Keep primitive types as-is
+                parsed_metadata[key] = value
+        
+        # No need to remove data_points from metadata since we never added it
+        # The data_points is already handled separately above
         
         activity_data = {
             "activity_id": activity_id,
-            "metadata": metadata,
-            "data_points": metadata.get("data_points", [])
+            "metadata": parsed_metadata,  # metadata without data_points
+            "data_points": data_points    # data_points as separate field
         }
         
         return {

@@ -38,10 +38,10 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
             }
         
         activity_data = result["activity_data"]
-        metadata = activity_data["metadata"]
-        data_points = activity_data["data_points"]
+        data_points_streams = activity_data["data_points"]['streams']
+        data_points_laps = activity_data["data_points"]['laps']
         
-        if not data_points:
+        if not data_points_streams:
             return {
                 "status": "error",
                 "message": "No data points available for this activity",
@@ -50,8 +50,10 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
             }
         
         # Convert data points to DataFrame
-        df = pd.DataFrame(data_points)
-        
+        df = pd.DataFrame(data_points_streams)
+
+        ####################### Creating 1st chart
+
         # Convert distance from meters to kilometers
         df['distance_km'] = df['distance_meters'] / 1000
 
@@ -187,12 +189,74 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
             os.makedirs(uploads_dir, exist_ok=True)
             
             # Generate default filename
-            chart_path = os.path.join(uploads_dir, f"running_chart_activity_{activity_id}.png")
+            chart_path = os.path.join(uploads_dir, f"running_chart_activity_{activity_id}_2.png")
         
         # Save the chart
         plt.savefig(chart_path, dpi=300, bbox_inches='tight')
         print(f"Chart saved to: {chart_path}")
         
+        ####################### Creating 2nd chart
+
+        laps_df = pd.DataFrame(data_points_laps)
+
+        # Each lap distance is individual, so we need to accumulate them
+        laps_df['cumulative_distance_meters'] = laps_df['distance_meters'].cumsum()
+        # Convert distance from meters to kilometers
+        laps_df['distance_km'] = laps_df['cumulative_distance_meters'] / 1000
+
+        fig, ax5 = plt.subplots(figsize=(10, 6))
+
+        sns.barplot(x=laps_df['lap_index'], y=laps_df['velocity_ms'], ax=ax5, label='Pace', color='blue', width=0.7)
+        ax5.set_ylabel('Pace (min/km)', color='blue')
+        ax5.tick_params(axis='y', labelcolor='blue')
+        ax5.grid(True,  # Enable grid
+                color='gray',  # Set color (e.g., 'gray', 'red', '#CCCCCC')
+                linestyle='-.',  # Set line style (e.g., '-', '--', ':', '-.')
+                linewidth=0.8,  # Set line width
+                alpha=0.9,  # Set transparency
+                which='major',  # Apply to 'major', 'minor', or 'both' ticks
+                )
+
+        max_velocity = laps_df['velocity_ms'].max()
+        min_velocity = laps_df['velocity_ms'].min()
+
+        ax5.set_ylim(min_velocity*0.7, max_velocity*1.05) # Setting y-limit for Velocity from 0 to 1.5 times the max velocity
+
+        # Function to convert m/s to min/km (pace) and format as MM:SS
+        def ms_to_minkm_mmss(velocity_ms):
+            if velocity_ms == 0:
+                return 'inf'  # Or some other indicator for 0 velocity
+            pace_minutes_decimal = (1000 / velocity_ms) / 60
+            minutes = int(pace_minutes_decimal)
+            seconds = int((pace_minutes_decimal - minutes) * 60)
+            return f'{minutes:02d}:{seconds:02d}'
+
+        # Apply the conversion and formatting to the y-axis tick labels for Velocity
+        velocity_ticks = ax5.get_yticks()
+        ax5.set_yticks(velocity_ticks) # Set the tick locations
+        ax5.set_yticklabels([ms_to_minkm_mmss(y) if ms_to_minkm_mmss(y) != 'inf' else 'inf' for y in velocity_ticks])
+        
+        plt.tight_layout()
+        
+        # Determine save path - always save the chart
+        if save_path:
+            chart_path = save_path
+        else:
+            # Get the uploads directory path
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            app_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            uploads_dir = os.path.join(app_dir, "app", "uploads")
+            
+            # Create uploads directory if it doesn't exist
+            os.makedirs(uploads_dir, exist_ok=True)
+            
+            # Generate default filename
+            chart_path = os.path.join(uploads_dir, f"running_chart_activity_{activity_id}_1.png")
+        
+        # Save the chart
+        plt.savefig(chart_path, dpi=300, bbox_inches='tight')
+        print(f"Chart saved to: {chart_path}")
+
         print(f"Successfully created running chart for activity {activity_id}")
         return {
             "status": "success",

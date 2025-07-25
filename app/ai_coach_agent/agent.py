@@ -21,7 +21,7 @@ from .tools import (
     edit_event,
     get_current_time,
     list_events,
-    get_activity_with_streams,
+    get_activity_complete,
     get_weather_forecast,
     file_reader,
     read_image_as_binary,
@@ -213,7 +213,7 @@ strava_agent = LlmAgent(
     ## Main Workflow: "List my strava activities for [date]"
     When asked about a strava activities for a specific date, follow this exact process:
 
-    1. **Get strava activities**: Use `get_activity_with_streams` with the requested date.
+    1. **Get strava activities**: Use `get_activity_complete` with the requested date.
     2. **Check if activities were found**: If the response contains activities (status is "success"):
        a. Extract the `activity_id` from the response
        b. Extract the `actual_start` from the response metadata
@@ -224,8 +224,8 @@ strava_agent = LlmAgent(
        d. Use `write_activity_data` with the complete activity_data structure from the response
        e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
         
-    ## Response Structure from get_activity_with_streams
-    The `get_activity_with_streams` tool returns a response with this structure:
+    ## Response Structure from get_activity_complete
+    The `get_activity_complete` tool returns a response with this structure:
     ```json
     {{
         "status": "success",
@@ -241,21 +241,41 @@ strava_agent = LlmAgent(
                 "actual_start": "08:33",
                 "pace": "5:15/km",
                 "total_distance_meters": 10516.9,
-                "total_data_points": 100,
+                "total_laps": 8,
+                "total_stream_points": 100,
                 "resolution": "low",
-                "series_type": "distance"
+                "series_type": "distance",
+                "available_streams": ["distance", "velocity_smooth", "heartrate", "altitude", "cadence"]
             }},
-            "data_points": [
-                {{
-                    "index": 0,
-                    "distance_meters": 0.0,
-                    "velocity_ms": 0.0,
-                    "heartrate_bpm": 81,
-                    "altitude_meters": 48.6,
-                    "cadence": null
-                }},
-                // ... more data points
-            ]
+            "data_points": {{
+                "laps": [
+                    {{
+                        "index": 0,
+                        "lap_index": 1,
+                        "distance_meters": 1000.0,
+                        "velocity_ms": 3.06,
+                        "heartrate_bpm": 121.1,
+                        "max_heartrate_bpm": 131.0,
+                        "cadence": 158.8,
+                        "elapsed_time": 327,
+                        "moving_time": 327,
+                        "total_elevation_gain": 0.0,
+                        "max_speed": 4.667,
+                        "start_index": 0,
+                        "end_index": 69
+                    }}
+                ],
+                "streams": [
+                    {{
+                        "index": 0,
+                        "distance_meters": 0.0,
+                        "velocity_ms": 3.2,
+                        "heartrate_bpm": 120,
+                        "altitude_meters": 45.2,
+                        "cadence": 160
+                    }}
+                ]
+            }}
         }}
     }}
     ```
@@ -270,7 +290,7 @@ strava_agent = LlmAgent(
 
     2. **write_activity_data**:
        - activity_data: the complete activity_data object from the response
-       - This includes session text, metadata, and data_points
+       - This includes session text, metadata, and data_points (containing both laps and streams)
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
@@ -280,7 +300,7 @@ strava_agent = LlmAgent(
         
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     """,
-    tools=[get_activity_with_streams,
+    tools=[get_activity_complete,
            mark_session_completed_by_date,
            agent_log,
            write_activity_data],
@@ -332,38 +352,34 @@ chart_agent = LlmAgent(
     2. The tool will create a chart showing heart rate, altitude, and pace data
     3. The chart will be saved as an image file
     
-    ### 2. Analyzing Charts: "Analyze this chart: [image_path]"
-    When provided with an image path of a running chart (e.g., "Analyze this chart: /app/uploads/running_chart_activity_15194488126.png"):
-    1. Use the `read_image_as_binary` tool to verify the image file exists and get the correct path
-    2. The tool will return a confirmation message with the actual file path
-    3. You can then analyze the image directly using your multimodal capabilities
-    4. Analyze the visual data in the chart including heart rate, pace, and altitude graphs
-    5. Provide detailed insights about the running performance
-    6. Look for patterns, trends, and anomalies in the data
+    ### 2. Analyzing Charts: "Analyse activity:
+    - Planned session: [planned_session]
+    - Image1 [image_path_1]
+    - Image2 [image_path_2]"
     
-    ## Chart Analysis Capabilities
-    When analyzing running charts, examine:
-    - Heart rate patterns (min, avg, max values and trends)
-    - Pace consistency and variations throughout the run
-    - Altitude changes and their impact on performance
-    - Performance trends and any notable segments
-    - Any anomalies or interesting patterns in the data
-    - Overall run quality and efficiency
+    When provided with two image paths for analysis (e.g., "Analyse activity:
+    - Planned session: Easy Run
+    - Image1 /app/uploads/running_chart_activity_15194488126_1.png
+    - Image2 /app/uploads/running_chart_activity_15194488126_2.png"):
+    
+    1. Use the `read_image_as_binary` tool to verify both image files exist and get the correct paths
+    2. The tool will return confirmation messages with the actual file paths
+    3. You can then analyze both images directly using your multimodal capabilities
+    
+    **Image1 Analysis (Sub-segment Identification):**
+    4. Analyze the visual data in Image1 including pace in y axis and laps in x axis
+    5. Identify sub-segments of the run, specifically the warm up, the main part of the run, and the cool down
+    
+    **Image2 Analysis (Session Feedback):**
+    6. Analyze the visual data in Image2 including heart rate, pace, and altitude graphs
+    7. Provide feedback about the actual session against the [planned_session]
+    8. [planned_session] can be Easy Run, Long Run, Speed Session, Hill Session or Tempo
     
     ## Input Formats
     You can analyze charts from:
-    - Local file paths (e.g., "/app/uploads/running_chart.png") - use read_image_as_binary tool to verify and get path
+    - Two local file paths (e.g., "/app/uploads/running_chart_activity_15194488126_1.png" and "/app/uploads/running_chart_activity_15194488126_2.png") - use read_image_as_binary tool to verify and get paths
     - Direct image data provided in the conversation
     - Binary image data (which you can see and analyze directly)
-    
-    ## Image Analysis Instructions
-    When you receive an image analysis request:
-    1. If an image path is provided (e.g., "/app/uploads/running_chart_activity_15194488126.png"), use the `read_image_as_binary` tool to verify the file exists
-    2. The tool will return a confirmation message with the actual file path
-    3. You can then analyze the image directly using your multimodal capabilities
-    4. Analyze the visual data in the chart including heart rate, pace, and altitude graphs
-    5. Provide specific insights about the running performance
-    6. Look for patterns, trends, and any notable segments in the data
     
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
@@ -374,9 +390,22 @@ chart_agent = LlmAgent(
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     
     ## Response Format
-    - For chart analysis: Provide detailed insights about the running performance shown in the chart, including specific observations about heart rate, pace, and altitude patterns
-    - Be specific about the data you can see in the chart
+    When analyzing running charts with two images, structure your response as follows:
+    
+    **Based on Image1 (Sub-segment Identification):**
+    1. "I have identified the sub-segments:
+       - warm up: [specific kilometer range or 'no identified']
+       - run session: [specific kilometer range]
+       - cool down: [specific kilometer range or 'no identified']"
+    2. "Explain how you identified the sub-segments from Image1"
+    
+    **Based on Image2 (Session Feedback):**
+    3. "Explain the chart patterns from Image2 and how they match the [planned_session]"
+    4. "Provide feedback about the actual session against the [planned_session]"
+     
+    - Be specific about the data you can see in each chart
     - When analyzing images, describe the visual elements, trends, and patterns you observe
+    - Clearly distinguish between analysis from Image1 and Image2
     """,
     tools=[read_image_as_binary, agent_log],
 )
@@ -407,15 +436,18 @@ root_agent = Agent(
     You can analyze charts (both images and text) through routing to the `chart_agent`.
 
     ## Image Analysis
-    When a user asks to analyze an image or chart (e.g., "Analyze this chart: /app/uploads/running_chart_activity_15194488126.png"), 
-    you MUST immediately delegate to the `chart_agent` and pass the complete request including the image path.
-    DO NOT try to analyze the image yourself - the chart_agent has multimodal capabilities and can directly see and analyze images.
-    Simply route the request: "Please analyze this chart: /app/uploads/running_chart_activity_15194488126.png"
+    When a user asks to analyze activity charts (e.g., "Analyse activity:
+    - Planned session: Easy Run
+    - Image1 /app/uploads/running_chart_activity_15194488126_1.png
+    - Image2 /app/uploads/running_chart_activity_15194488126_2.png"), 
+    you MUST immediately delegate to the `chart_agent` and pass the complete request including both image paths.
+    DO NOT try to analyze the images yourself - the chart_agent has multimodal capabilities and can directly see and analyze images.
+    Simply route the request with the exact format provided by the user.
     
     **CRITICAL**: Look for these exact patterns and route to chart_agent:
-    - "Analyze this chart:"
-    - "Analyze this image:"
-    - "Look at this chart:"
+    - "Analyse activity:"
+    - "Analyze activity:"
+    - Any request containing "Planned session:" and "Image1" and "Image2"
     - Any request containing "/app/uploads/" and asking for analysis
 
     ## Training Plan Operations

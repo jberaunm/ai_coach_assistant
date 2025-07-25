@@ -7,7 +7,7 @@ from .create_event import create_event
 from .delete_event import delete_event
 from .edit_event import edit_event
 from .list_events import list_events
-from .strava_list_activities import get_activity_with_streams
+from .strava_list_activities import get_activity_complete
 from .get_weather import get_weather_forecast
 from .training_plan_parser import file_reader
 from .image_reader import read_image_as_binary
@@ -21,7 +21,7 @@ __all__ = [
     "edit_event",
     "list_events",
     "get_current_time",
-    "get_activity_with_streams",
+    "get_activity_complete",
     "get_weather_forecast",
     "file_reader",
     "read_image_as_binary",
