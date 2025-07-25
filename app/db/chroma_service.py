@@ -488,14 +488,17 @@ class ChromaService:
             document = results['documents'][0]
             metadata = results['metadatas'][0]
             
-            # Parse JSON strings back to objects
+            # Parse data_points separately to avoid duplication
+            data_points = {}
             if metadata.get("data_points"):
-                metadata["data_points"] = json.loads(metadata["data_points"])
+                data_points = json.loads(metadata["data_points"])
+                # Remove data_points from metadata to avoid duplication
+                del metadata["data_points"]
             
             activity_data = {
                 "activity_id": activity_id,
-                "metadata": metadata,
-                "data_points": metadata.get("data_points", [])
+                "metadata": metadata,  # metadata without data_points
+                "data_points": data_points  # data_points as separate field
             }
             
             return {

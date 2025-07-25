@@ -1,5 +1,5 @@
 from datetime import timedelta, datetime
-from .strava_utils import get_strava_client, format_activity_distance, format_activity_duration, format_activity_pace
+from strava_utils import get_strava_client, format_activity_distance, format_activity_duration, format_activity_pace
 
 def get_activity_with_streams(start_date: str) -> dict:
     """
@@ -135,6 +135,25 @@ def get_activity_with_streams(start_date: str) -> dict:
             "message": f"Error fetching activity data: {str(e)}",
             "activity_data": None,
         }
+    
+def get_activity_by_id(activity_id: int) -> dict:
+    """
+    Get activity data by ID
+    """
+    try:
+        client = get_strava_client()
+        activity = client.get_activity(activity_id)
+        print(f"Activity data: {activity}")
+        return {
+            "status": "success",
+            "activity_data": activity
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error fetching activity data: {str(e)}",
+            "activity_data": None,
+        }
 
 def get_activity_with_laps(start_date: str) -> dict:
     """
@@ -260,7 +279,7 @@ def get_activity_with_laps(start_date: str) -> dict:
                 "cadence": cadence_spm,
                 "elapsed_time": lap.elapsed_time if lap.elapsed_time else None,
                 "moving_time": lap.moving_time if lap.moving_time else None,
-                "altitude_meters": float(lap.total_elevation_gain),
+                "total_elevation_gain": float(lap.total_elevation_gain) if lap.total_elevation_gain else None,
                 "max_speed": lap.max_speed if lap.max_speed else None,
                 "start_index": lap.start_index if lap.start_index else None,
                 "end_index": lap.end_index if lap.end_index else None,
@@ -282,171 +301,4 @@ def get_activity_with_laps(start_date: str) -> dict:
             "activity_data": None,
         }
 
-def get_activity_complete(start_date: str) -> dict:
-    """
-    Get complete activity data including both lap and stream data for the first activity on a given date
-
-    Args:
-        start_date (str): Start date in YYYY-MM-DD format
-
-    Returns:
-        dict: Complete activity data with metadata, lap data, and stream data points
-    """
-    try:
-        print(f"[StravaAPI tool] START: get_activity_complete() for date {start_date}")
-                
-        # Get Strava client using the utility function
-        client = get_strava_client()
-        if not client:
-            return {
-                "status": "error",
-                "message": "Failed to authenticate with Strava API",
-                "activity_data": None,
-            }
-        
-        # Calculate end_date as the next day after start_date
-        start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
-        end_datetime = start_datetime + timedelta(days=1)
-        end_date = end_datetime.strftime("%Y-%m-%d")
-        
-        # Get activities for the specified date
-        activities = client.get_activities(after=start_date, before=end_date, limit=5)
-        
-        if not activities:
-            return {
-                "status": "error",
-                "message": f"No activities found for {start_date}",
-                "activity_data": None,
-            }
-
-        # Find the first run activity
-        target_activity = None
-        for activity in activities:
-            if activity.sport_type == "Run":
-                target_activity = activity
-                break
-        
-        if not target_activity:
-            return {
-                "status": "error",
-                "message": f"No running activities found for {start_date}",
-                "activity_data": None,
-            }
-
-        activity_id = target_activity.id
-        print(f"Found activity ID: {activity_id}")
-
-        # Get detailed activity data (includes laps)
-        detailed_activity = client.get_activity(activity_id)
-        
-        if not detailed_activity:
-            return {
-                "status": "error",
-                "message": f"No detailed activity found with ID {activity_id}",
-                "activity_data": None,
-            }
-
-        # Get activity streams
-        types = ["distance", "velocity_smooth", "heartrate", "altitude", "cadence"]
-        streams = client.get_activity_streams(
-            activity_id=activity_id,
-            types=types,
-            resolution="low",
-            series_type="distance",
-        )
-
-        # Structure the complete data
-        activity_data = {
-            "activity_id": activity_id,
-            "metadata": {
-                "type": detailed_activity.sport_type.root if detailed_activity.sport_type else "Unknown",
-                "name": detailed_activity.name if detailed_activity.name else "Untitled Activity",
-                "distance": format_activity_distance(float(detailed_activity.distance)) if detailed_activity.distance else "N/A",
-                "duration": format_activity_duration(detailed_activity.moving_time) if detailed_activity.moving_time else "N/A",
-                "start_date": detailed_activity.start_date_local.strftime("%Y-%m-%d %H:%M") if detailed_activity.start_date_local else "N/A",
-                "actual_start": detailed_activity.start_date_local.strftime("%H:%M") if detailed_activity.start_date_local else "N/A",
-                "pace": format_activity_pace(detailed_activity.average_speed) if detailed_activity.average_speed else "N/A",
-                "total_distance_meters": float(detailed_activity.distance) if detailed_activity.distance else 0,
-                "total_laps": len(detailed_activity.laps) if detailed_activity.laps else 0,
-                "total_stream_points": 0,
-                "resolution": "low",
-                "series_type": "distance",
-                "available_streams": types
-            },
-            "data_points": {
-                "laps": [],
-                "streams": []
-            }
-        }
-
-        # Process laps data
-        if detailed_activity.laps:
-            for i, lap in enumerate(detailed_activity.laps):
-                # Get velocity in m/s and convert to pace format
-                velocity_ms = lap.average_speed if lap.average_speed else None
-                pace = format_activity_pace(velocity_ms) if velocity_ms and velocity_ms > 0 else None
-                
-                # Get cadence in rpm and convert to spm (1 rpm = 2 spm)
-                cadence_rpm = lap.average_cadence if lap.average_cadence else None
-                cadence_spm = cadence_rpm * 2 if cadence_rpm and cadence_rpm > 0 else None
-                
-                lap_data = {
-                    "index": i,
-                    "lap_index": lap.lap_index if lap.lap_index else i + 1,
-                    "distance_meters": float(lap.distance) if lap.distance else None,
-                    "velocity_ms": velocity_ms,
-                    "heartrate_bpm": lap.average_heartrate if lap.average_heartrate else None,
-                    "max_heartrate_bpm": lap.max_heartrate if lap.max_heartrate else None,
-                    "cadence": cadence_spm,
-                    "elapsed_time": lap.elapsed_time if lap.elapsed_time else None,
-                    "moving_time": lap.moving_time if lap.moving_time else None,
-                    "total_elevation_gain": float(lap.total_elevation_gain),
-                    "max_speed": lap.max_speed if lap.max_speed else None
-                }
-                activity_data["data_points"]["laps"].append(lap_data)
-
-        # Process streams data
-        if streams:
-            # Get the distance stream as our primary reference
-            distance_stream = streams.get('distance')
-            if distance_stream and distance_stream.data:
-                total_stream_points = len(distance_stream.data)
-                activity_data["metadata"]["total_stream_points"] = total_stream_points
-
-                # Create synchronized data points
-                for i in range(total_stream_points):
-                    # Get velocity in m/s and convert to pace format
-                    velocity_ms = streams.get('velocity_smooth').data[i] if streams.get('velocity_smooth') and i < len(streams['velocity_smooth'].data) else None
-                    pace = format_activity_pace(velocity_ms) if velocity_ms and velocity_ms > 0 else None
-                    
-                    # Get cadence in rpm and convert to spm (1 rpm = 2 spm)
-                    cadence_rpm = streams.get('cadence').data[i] if streams.get('cadence') and i < len(streams['cadence'].data) else None
-                    cadence_spm = cadence_rpm * 2 if cadence_rpm and cadence_rpm > 0 else None
-                    
-                    stream_data = {
-                        "index": i,
-                        "distance_meters": distance_stream.data[i] if i < len(distance_stream.data) else None,
-                        "velocity_ms": velocity_ms,
-                        "heartrate_bpm": streams.get('heartrate').data[i] if streams.get('heartrate') and i < len(streams['heartrate'].data) else None,
-                        "altitude_meters": streams.get('altitude').data[i] if streams.get('altitude') and i < len(streams['altitude'].data) else None,
-                        "cadence": cadence_spm,
-                    }
-                    activity_data["data_points"]["streams"].append(stream_data)
-
-        print(f"Successfully processed activity {activity_id}:")
-        print(f"  - Laps: {len(activity_data['data_points']['laps'])}")
-        print(f"  - Stream points: {len(activity_data['data_points']['streams'])}")
-        print(f"{activity_data}")
-        
-        return {
-            "status": "success",
-            "message": f"Retrieved complete data for activity {activity_id} on {start_date}",
-            "activity_data": activity_data
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Error fetching complete activity data: {str(e)}",
-            "activity_data": None,
-        }
+get_activity_with_laps("2025-07-23")
