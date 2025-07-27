@@ -292,120 +292,122 @@ strava_agent = LlmAgent(
        - activity_data: the complete activity_data object from the response
        - This includes session text, metadata, and data_points (containing both laps and streams)
 
-    ## Logging Instructions
-    You MUST use the `agent_log` tool to log your execution:
-    1. When you start processing: `agent_log("strava_agent", "start", "Starting to get Strava activities")`
-    2. When you finish: `agent_log("strava_agent", "finish", "Successfully retrieved Strava activities")`
-    3. If you encounter any errors: `agent_log("strava_agent", "error", "Error occurred: [describe the error]")`
-        
-    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
-    """,
-    tools=[get_activity_complete,
-           mark_session_completed_by_date,
-           agent_log,
-           write_activity_data],
-)
-
-classifier_agent = LlmAgent(
-    name="classifier_agent",
-    model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
-    description=(
-        "Agent that creates a running chart from a Strava activity"
-    ),
-    instruction=f"""
-    You are a classifier agent, a helpful assistant that can perform various tasks helping with Strava operations.
-
-    ## Main Workflow: "Create a running chart for the activity [activity_id]"
+    ## Creating Charts: "Create a running chart for the activity [activity_id]"
     When asked about a running chart for a specific activity, follow this exact process:
     1. **Create a running chart**: Use `plot_running_chart` with the activity_id
     2. **Check if the chart was created**: If the response contains a chart (status is "success"):
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
-    1. When you start processing: `agent_log("classifier_agent", "start", "Starting to create chart")`
-    2. When you finish: `agent_log("classifier_agent", "finish", "Successfully created chart")`
-    3. If you encounter any errors: `agent_log("classifier_agent", "error", "Error occurred: [describe the error]")`
+    1. When you start processing: `agent_log("strava_agent", "start", "Starting to get Strava activities")`
+    2. When you finish: `agent_log("strava_agent", "finish", "Successfully retrieved Strava activities")`
+    3. If you encounter any errors: `agent_log("strava_agent", "error", "Error occurred: [describe the error]")`
 
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     """,
-    tools=[plot_running_chart, agent_log],
+    tools=[get_activity_complete,
+           mark_session_completed_by_date,
+           write_activity_data,
+           plot_running_chart,
+           agent_log],
 )
 
-chart_agent = LlmAgent(
-    name="chart_agent",
-    model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
+analyser_agent = Agent(
+    name="analyser_agent",
+    model=LiteLlm(model="mistral/pixtral-12b-2409", api_key=api_key),
+    #model="gemini-2.5-pro",
     description=(
-        "Agent that creates and analyzes running charts from Strava activities"
+        "Agent that identifies running sub-segments using numerical data analysis and confirms findings via visual interpretation of corresponding charts."
     ),
     instruction=f"""
-    You are a chart agent that can create running charts from Strava activities and provide analysis.
-    
-    ## Multimodal Capabilities
-    You are using a vision-capable model (mistral-small-latest) that can directly analyze images.
-    When you receive an image path, you can access and analyze the image file directly.
-    
-    ## Main Workflows:
-    
-    ### 1. Creating Charts: "Create a running chart for activity [activity_id]"
-    When asked to create a running chart for a specific activity:
-    1. Use `plot_running_chart` with the activity_id
-    2. The tool will create a chart showing heart rate, altitude, and pace data
-    3. The chart will be saved as an image file
-    
-    ### 2. Analyzing Charts: "Analyse activity:
-    - Planned session: [planned_session]
-    - Image1 [image_path_1]
-    - Image2 [image_path_2]"
-    
-    When provided with two image paths for analysis (e.g., "Analyse activity:
-    - Planned session: Easy Run
-    - Image1 /app/uploads/running_chart_activity_15194488126_1.png
-    - Image2 /app/uploads/running_chart_activity_15194488126_2.png"):
-    
-    1. Use the `read_image_as_binary` tool to verify both image files exist and get the correct paths
-    2. The tool will return confirmation messages with the actual file paths
-    3. You can then analyze both images directly using your multimodal capabilities
-    
-    **Image1 Analysis (Sub-segment Identification):**
-    4. Analyze the visual data in Image1 including pace in y axis and laps in x axis
-    5. Identify sub-segments of the run, specifically the warm up, the main part of the run, and the cool down
-    
-    **Image2 Analysis (Session Feedback):**
-    6. Analyze the visual data in Image2 including heart rate, pace, and altitude graphs
-    7. Provide feedback about the actual session against the [planned_session]
-    8. [planned_session] can be Easy Run, Long Run, Speed Session, Hill Session or Tempo
-    
-    ## Input Formats
-    You can analyze charts from:
-    - Two local file paths (e.g., "/app/uploads/running_chart_activity_15194488126_1.png" and "/app/uploads/running_chart_activity_15194488126_2.png") - use read_image_as_binary tool to verify and get paths
-    - Direct image data provided in the conversation
-    - Binary image data (which you can see and analyze directly)
-    
+    You are an analyser agent. Your main task is to identify three distinct sub-segments within a running session: "Warm up," "Main session," and "Cool down."
+    You will primarily determine these segments through numerical data analysis and then confirm your findings by conceptually analyzing the visual patterns on the corresponding chart image.
+
+    **Input**: You will receive **two pieces of input**:
+    1.  A list of lap data, provided as a JSON array of objects, where each object has "lap_index" and "pace" keys.
+        * Example: ```json
+        {{  
+            "laps": [
+                {{"lap_index": 1, "pace": 3.06}},
+                {{"lap_index": 2, "pace": 3.15}}
+            ]
+        }}
+        ```
+        * The "lap_index" will be an integer indicating the sequential order of the lap (starting from 1).
+        * The "pace" will be a numerical value in **meters per second (m/s)** (a higher value means faster pace, a lower value means slower pace).
+    2.  An path of an image of the corresponding running chart.
+        * Use the `read_image_as_binary` tool to verify image file exists and get the correct paths
+        * This chart will display black bars representing individual laps, with "Laps" on the x-axis and "Pace (meter per second)" on the y-axis.
+        * A higher bar indicates a faster pace, and a lower bar indicates a slower pace.
+
+    **Output**: Your output should clearly indicate the identified sub-segments based on your numerical analysis. Additionally, you must provide a confirmation statement describing how the visual chart supports (or highlights any nuances in) your findings. Output format examples:
+    -   "Based on numerical analysis: Warm up: laps X-Y, Main session: laps A-B, Cool down: laps C-D. Visually, the chart clearly shows/supports [explain visual confirmation]."
+    -   "Based on numerical analysis: Main session: laps 1-Z. Visually, the chart shows consistent paces throughout, confirming no distinct warm-up or cool-down segments."
+
+    ## Main Workflow: "Analyse this data and chart"
+    When asked to analyze running data and a chart, follow this exact process:
+
+    ### 1. Primary Segmentation: Numerical Data Analysis
+    #### 1.1. Receive and Sequence Numerical Data:
+    -   You will receive the lap data as an already structured list of `(lap_index, pace_value)` pairs.
+    -   Ensure the data is sorted by `lap_index` in ascending order. The total number of pairs in this list represents all the laps in the session.
+
+    #### 1.2. Analyze Pace Differences and Trends:
+    -   For each lap `i` (from `i=2` to the last lap), calculate the lap-to-lap pace difference: `delta_pace_i = pace_value_i - pace_value_(i-1)`.
+        -   A positive `delta_pace` means the pace got faster.
+        -   A negative `delta_pace` means the pace got slower.
+    -   Calculate the overall average pace of the session for contextual comparison.
+
+    #### 1.3. Identify "Warm up" Segment (Numerical):
+    -   **Pace Characteristics**: Generally characterized by a **slower pace** (lower m/s value) at the beginning of the session.
+    -   **Pace Trend**: Identify an initial sequence of laps where the `pace_value` is relatively low and shows a trend of *increasing* (getting faster, `delta_pace` is predominantly positive).
+    -   **Boundary Detection**: The "Warm up" segment ends at the first lap where the pace either:
+        * Stabilizes: The `pace_value` variance becomes minimal, and subsequent `delta_pace` values are close to zero, or
+        * Transitions sharply: There is a significant and sustained increase in `pace_value` (getting much faster, e.g., `delta_pace` is a large positive number for multiple consecutive laps) signaling the start of the main effort.
+    -   If no clear warm-up trend is identified, this segment might not exist, and the Main Session will start from Lap 1.
+
+    #### 1.4. Identify "Cool down" Segment (Numerical):
+    -   **Pace Characteristics**: Generally characterized by a **slower pace** (lower m/s value) at the end of the session.
+    -   **Pace Trend**: Identify a final sequence of laps where the `pace_value` is relatively low and potentially shows a trend of further *decreasing* (getting slower, `delta_pace` is predominantly negative).
+    -   **Boundary Detection**: The "Cool down" segment begins at the first lap (reading backwards from the end) where the `pace_value`:
+        * Significantly deviates downwards (becomes slower) from the main session's typical pace. Look for a `delta_pace` value that is a large negative number when compared to the preceding main session laps.
+        * And subsequent laps generally maintain this slower pace or continue to get slower.
+    -   If no clear cool-down trend is identified, this segment might not exist.
+
+    #### 1.5. Identify "Main session" Segment (Numerical):
+    -   **Characteristics**: This segment comprises all laps that are *not* identified as "Warm up" or "Cool down."
+    -   **Pace Characteristics**: The main session typically shows a more consistent and often **faster pace** (higher m/s value) compared to the warm-up and cool-down. It may also show deliberate variations (e.g., intervals), but these will generally be around a central, intended effort level.
+    -   **Always Present**: If you cannot confidently identify distinct "Warm up" or "Cool down" segments based on significant pace changes and trends, then the entire session should be classified as the "Main session." The "Main session" is always considered present.
+
+    ### 2. Confirmation: Visual Chart Analysis
+    #### 2.1. Receive Chart Image:
+    -   You will receive the image of the running chart for visual confirmation.
+
+    #### 2.2. Perform Visual Data Interpretation (for Confirmation):
+    -   **Identify Axes and Labels**: Correctly identify the x-axis as "Laps" and the y-axis as "Pace (meter per second)".
+    -   **Visually Inspect Bars and Trends**: Mentally trace the height of the bars corresponding to the numerically identified segments.
+        * For the "Warm up" segment: Visually confirm if the bars start low and generally increase in height (get faster).
+        * For the "Main session" segment: Visually confirm if the bars show a consistent higher height (faster pace) or expected variations.
+        * For the "Cool down" segment: Visually confirm if the bars end low and generally decrease in height (get slower).
+    -   **Confirm Lap Count from Image**: Visually confirm that the number of bars on the chart matches the total number of laps from your numerical data analysis. This is a final check against image misinterpretation.
+
+    ### 3. Final Output Generation:
+    -   Combine the results from your numerical segmentation (Step 1) with your visual confirmation (Step 2) into the final output format.
+    -   State the identified segments clearly.
+    -   Add a concise statement about how the visual chart supports these findings or if any subtle nuances are observed visually.
+
+    ## Handling Edge Cases and Ambiguity:
+    - **Prioritization**: Numerical analysis is primary. Visual analysis is for confirmation. If a very subtle numerical segment is visually indistinguishable, note this nuance.
+    - **Short Sessions (e.g., 1 to 4 laps)**: If numerical trends are not significant, classify as "Main session." Visually confirm consistency.
+    - **Subtlety**: Numerical analysis will capture finer details. Visual confirmation adds human-like contextual understanding.
+
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
-    1. When you start processing: `agent_log("chart_agent", "start", "Starting chart operation")`
-    2. When you finish: `agent_log("chart_agent", "finish", "Successfully completed chart operation")`
-    3. If you encounter any errors: `agent_log("chart_agent", "error", "Error occurred: [describe the error]")`
-    
+    1. When you start processing: `agent_log("analyser_agent", "start", "Starting hybrid analysis operation")`
+    2. When you finish all steps: `agent_log("analyser_agent", "finish", "Successfully completed hybrid analysis operation")`
+    3. If you encounter any errors: `agent_log("analyser_agent", "error", "Error occurred: [describe the error]")`
+
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
-    
-    ## Response Format
-    When analyzing running charts with two images, structure your response as follows:
-    
-    **Based on Image1 (Sub-segment Identification):**
-    1. "I have identified the sub-segments:
-       - warm up: [specific kilometer range or 'no identified']
-       - run session: [specific kilometer range]
-       - cool down: [specific kilometer range or 'no identified']"
-    2. "Explain how you identified the sub-segments from Image1"
-    
-    **Based on Image2 (Session Feedback):**
-    3. "Explain the chart patterns from Image2 and how they match the [planned_session]"
-    4. "Provide feedback about the actual session against the [planned_session]"
-     
-    - Be specific about the data you can see in each chart
-    - When analyzing images, describe the visual elements, trends, and patterns you observe
-    - Clearly distinguish between analysis from Image1 and Image2
     """,
     tools=[read_image_as_binary, agent_log],
 )
@@ -432,23 +434,14 @@ root_agent = Agent(
     You can perform Strava operations through routing to the `strava_agent`.
 
     ## Chart operations
-    You can create charts through routing to the `classifier_agent`.
-    You can analyze charts (both images and text) through routing to the `chart_agent`.
+    You can create charts through routing to the `strava_agent`.
+    You can analyze charts (both images and text) through routing to the `analyser_agent`.
 
-    ## Image Analysis
-    When a user asks to analyze activity charts (e.g., "Analyse activity:
-    - Planned session: Easy Run
-    - Image1 /app/uploads/running_chart_activity_15194488126_1.png
-    - Image2 /app/uploads/running_chart_activity_15194488126_2.png"), 
-    you MUST immediately delegate to the `chart_agent` and pass the complete request including both image paths.
-    DO NOT try to analyze the images yourself - the chart_agent has multimodal capabilities and can directly see and analyze images.
+    ## Running Chart Analysis
+    When a user asks to analyze running charts, you MUST immediately delegate to the `analyser_agent`
+    and pass the complete request including image path.
+    DO NOT try to analyze the images yourself - the analyser_agent has multimodal capabilities and can directly see and analyze images.
     Simply route the request with the exact format provided by the user.
-    
-    **CRITICAL**: Look for these exact patterns and route to chart_agent:
-    - "Analyse activity:"
-    - "Analyze activity:"
-    - Any request containing "Planned session:" and "Image1" and "Image2"
-    - Any request containing "/app/uploads/" and asking for analysis
 
     ## Training Plan Operations
     When a user upload their training plan, inmediately delegate to the `planner_agent` including the file path
@@ -461,15 +454,14 @@ root_agent = Agent(
     - Be super concise in your responses and only return the information requested (not extra information).
     - NEVER show the raw response from a tool_outputs. Instead, use the information to answer the question.
     - NEVER show ```tool_outputs...``` in your response.
-    - For image analysis requests, you MUST always route to the chart_agent which has multimodal capabilities and is able to read the image.
+    - For image analysis requests, you MUST always route to the analyser_agent which has multimodal capabilities and is able to read the image.
     - NEVER try to analyze images yourself - you don't have multimodal capabilities.
-    - If you see "Analyze this chart:" or similar image analysis requests, immediately delegate to chart_agent.
+    - If you see "Analyze this chart:" or similar image analysis requests, immediately delegate to analyser_agent.
     """,
     tools=[
         AgentTool(agent=scheduler_agent),
         AgentTool(agent=strava_agent),
         AgentTool(agent=planner_agent),
-        AgentTool(agent=classifier_agent),
-        AgentTool(agent=chart_agent),
+        AgentTool(agent=analyser_agent),
     ]
 )

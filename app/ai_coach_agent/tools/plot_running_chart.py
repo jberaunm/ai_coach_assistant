@@ -24,7 +24,7 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
             - activity_info: Summary of the activity
     """
     try:
-        print(f"[PlotRunningChart tool] START: Creating running chart for activity {activity_id}")
+        print(f"[ChartCreator_tool] START: Creating running chart for activity {activity_id}")
         
         # Get activity data from ChromaDB
         result = get_activity_by_id(activity_id)
@@ -83,7 +83,7 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
         ax1.text(-0.15, avg_heartrate, 'AVG', va='bottom', ha='right', color='red')
         ax1.text(-0.15, max_heartrate, 'MAX', va='bottom', ha='right', color='red')
 
-        # Set only min, avg, and max as tick labels for Altitude
+        # Set only min, avg, and max as tick labels for HEART RATE
         ax1.set_yticks([min_heartrate, avg_heartrate, max_heartrate])
         ax1.set_yticklabels([f'{min_heartrate:.1f}', f'{avg_heartrate:.1f}', f'{max_heartrate:.1f}'])
 
@@ -106,7 +106,17 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
 
         # Set y-limit for Altitude axis
         max_altitude = df['altitude_meters'].max()
-        ax2.set_ylim(0, max_altitude * 6)
+        ax2.set_ylim(0, max_altitude * 4)
+
+        # Calculate and plot min, avg, max lines for Altitude
+        min_altitude = df['altitude_meters'].min()
+        max_altitude = df['altitude_meters'].max()
+        ax2.axhline(min_altitude, color='gray', linestyle=':', linewidth=2, label='MIN')
+        ax2.axhline(max_altitude, color='gray', linestyle=':', linewidth=2, label='MAX')
+
+        # Add text labels for min, avg, max Altitude
+        ax2.text(-0.15, min_altitude, 'MIN: ' + str(min_altitude), va='bottom', ha='right', color='gray')
+        ax2.text(-0.15, max_altitude, 'MAX: ' + str(max_altitude), va='bottom', ha='right', color='gray')
 
         ### PACE
         # Create a third y-axis for Pace
@@ -206,14 +216,15 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
 
         fig, ax5 = plt.subplots(figsize=(10, 6))
 
-        sns.barplot(x=laps_df['lap_index'], y=laps_df['velocity_ms'], ax=ax5, label='Pace', color='blue', width=0.7)
-        ax5.set_ylabel('Pace (min/km)', color='blue')
-        ax5.tick_params(axis='y', labelcolor='blue')
+        sns.barplot(x=laps_df['lap_index'], y=laps_df['velocity_ms'], ax=ax5, label='Pace', color='black', width=0.5)
+        ax5.set_ylabel('Pace (meters per second)', color='black')
+        ax5.set_xlabel('Laps', color='black')
+        ax5.tick_params(axis='y', labelcolor='black')
         ax5.grid(True,  # Enable grid
                 color='gray',  # Set color (e.g., 'gray', 'red', '#CCCCCC')
                 linestyle='-.',  # Set line style (e.g., '-', '--', ':', '-.')
-                linewidth=0.8,  # Set line width
-                alpha=0.9,  # Set transparency
+                linewidth=0.6,  # Set line width
+                alpha=0.8,  # Set transparency
                 which='major',  # Apply to 'major', 'minor', or 'both' ticks
                 )
 
@@ -221,20 +232,6 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
         min_velocity = laps_df['velocity_ms'].min()
 
         ax5.set_ylim(min_velocity*0.7, max_velocity*1.05) # Setting y-limit for Velocity from 0 to 1.5 times the max velocity
-
-        # Function to convert m/s to min/km (pace) and format as MM:SS
-        def ms_to_minkm_mmss(velocity_ms):
-            if velocity_ms == 0:
-                return 'inf'  # Or some other indicator for 0 velocity
-            pace_minutes_decimal = (1000 / velocity_ms) / 60
-            minutes = int(pace_minutes_decimal)
-            seconds = int((pace_minutes_decimal - minutes) * 60)
-            return f'{minutes:02d}:{seconds:02d}'
-
-        # Apply the conversion and formatting to the y-axis tick labels for Velocity
-        velocity_ticks = ax5.get_yticks()
-        ax5.set_yticks(velocity_ticks) # Set the tick locations
-        ax5.set_yticklabels([ms_to_minkm_mmss(y) if ms_to_minkm_mmss(y) != 'inf' else 'inf' for y in velocity_ticks])
         
         plt.tight_layout()
         
