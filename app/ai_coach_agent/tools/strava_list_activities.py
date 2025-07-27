@@ -12,7 +12,7 @@ def get_activity_with_streams(start_date: str) -> dict:
         dict: Complete activity data with metadata and stream data points
     """
     try:
-        print(f"[StravaAPI tool] START: get_activity_with_streams() for date {start_date}")
+        print(f"[StravaAPI_tool] START: get_activity_with_streams() for date {start_date}")
                 
         # Get Strava client using the utility function
         client = get_strava_client()
@@ -147,7 +147,7 @@ def get_activity_with_laps(start_date: str) -> dict:
         dict: Complete activity data with metadata and lap data points
     """
     try:
-        print(f"[StravaAPI tool] START: get_activity_with_laps() for date: {start_date}")
+        print(f"[StravaAPI_tool] START: get_activity_with_laps() for date: {start_date}")
                 
         # Get Strava client using the utility function
         client = get_strava_client()
@@ -293,7 +293,7 @@ def get_activity_complete(start_date: str) -> dict:
         dict: Complete activity data with metadata, lap data, and stream data points
     """
     try:
-        print(f"[StravaAPI tool] START: get_activity_complete() for date {start_date}")
+        print(f"[StravaAPI_tool] START: get_activity_complete() for date {start_date}")
                 
         # Get Strava client using the utility function
         client = get_strava_client()

@@ -13,26 +13,30 @@ import 'reactflow/dist/style.css';
 import type { Node as RFNode } from 'reactflow';
 
 const initialNodes: Node[] = [
-  { id: 'root', position: { x: -30, y: 150 }, data: { label: 'Root Agent\nGemini' }, type: 'input', style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right },
-  { id: 'planner', position: { x: 260, y: 0 }, data: { label: 'Planner_agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'scheduler', position: { x: 260, y: 150 }, data: { label: 'Scheduler_agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'strava', position: { x: 260, y: 300 }, data: { label: 'Strava_agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'file_reader', position: { x: 540, y: -20 }, data: { label: 'File_reader tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'weatherapi', position: { x: 540, y: 60 }, data: { label: 'WeatherAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'calendarapi_list', position: { x: 540, y: 140 }, data: { label: 'CalendarAPI tool\nlist_events()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'calendarapi_create', position: { x: 540, y: 260 }, data: { label: 'CalendarAPI tool\ncreate_event()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'stravaapi', position: { x: 540, y: 380 }, data: { label: 'StravaAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'root', position: { x: -60, y: 120 }, data: { label: 'Root Agent\nGemini' }, type: 'input', style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 28, width: 200 }, sourcePosition: Position.Right },
+  { id: 'planner', position: { x: 250, y: 0 }, data: { label: 'Planner Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: 'scheduler', position: { x: 250, y: 120 }, data: { label: 'Scheduler Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: 'strava', position: { x: 250, y: 240 }, data: { label: 'Strava Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: 'analyser', position: { x: 250, y: 360 }, data: { label: 'Analyser Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: 'tool_file_reader', position: { x: 560, y: -20 }, data: { label: 'FileReader tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: 'tool_weatherapi', position: { x: 560, y: 60 }, data: { label: 'WeatherAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'tool_calendarapi_list', position: { x: 560, y: 140 }, data: { label: 'CalendarAPI tool\nlist_events()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'tool_calendarapi_create', position: { x: 560, y: 260 }, data: { label: 'CalendarAPI tool\ncreate_event()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'tool_stravaapi', position: { x: 560, y: 380 }, data: { label: 'StravaAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
+  { id: 'tool_chart', position: { x: 560, y: 460 }, data: { label: 'ChartCreator tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
 ];
 
 const initialEdges: Edge[] = [
-  { id: 'e1', source: 'root', target: 'planner', animated: true, style: { strokeWidth: 2 } },
-  { id: 'e2', source: 'root', target: 'scheduler', animated: true, style: { strokeWidth: 2 } },
-  { id: 'e3', source: 'root', target: 'strava', animated: true, style: { strokeWidth: 2 } },
-  { id: 'e4', source: 'planner', target: 'file_reader', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
-  { id: 'e5', source: 'scheduler', target: 'weatherapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
-  { id: 'e6', source: 'scheduler', target: 'calendarapi_list', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
-  { id: 'e7', source: 'scheduler', target: 'calendarapi_create', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
-  { id: 'e8', source: 'strava', target: 'stravaapi', animated: true, style: { stroke: '#a020f0', strokeWidth: 2 } },
+  { id: 'e1', source: 'root', target: 'planner', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
+  { id: 'e2', source: 'root', target: 'scheduler', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
+  { id: 'e3', source: 'root', target: 'strava', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
+  { id: 'e9', source: 'root', target: 'analyser', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
+  { id: 'e4', source: 'planner', target: 'tool_file_reader', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
+  { id: 'e5', source: 'scheduler', target: 'tool_weatherapi', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
+  { id: 'e6', source: 'scheduler', target: 'tool_calendarapi_list', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
+  { id: 'e7', source: 'scheduler', target: 'tool_calendarapi_create', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
+  { id: 'e8', source: 'strava', target: 'tool_stravaapi', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
+  { id: 'e10', source: 'analyser', target: 'tool_chart', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
 ];
 
 // Log pattern to node mapping
@@ -41,11 +45,13 @@ const logPatternToNodes: { [key: string]: string[] } = {
   '[PLANNER_AGENT]': ['planner'],
   '[SCHEDULER_AGENT]': ['scheduler'],
   '[STRAVA_AGENT]': ['strava'],
-  '[FileReader_tool]': ['file_reader'],
-  '[CalendarAPI_tool_create_event]': ['calendarapi_create'],
-  '[CalendarAPI_tool_list_events]': ['calendarapi_list'],
-  '[WeatherAPI_tool]': ['weatherapi'],
-  '[StravaAPI_tool]': ['stravaapi'],
+  '[ANALYSER_AGENT]': ['analyser'],
+  '[FileReader_tool]': ['tool_file_reader'],
+  '[CalendarAPI_tool_create_event]': ['tool_calendarapi_create'],
+  '[CalendarAPI_tool_list_events]': ['tool_calendarapi_list'],
+  '[WeatherAPI_tool]': ['tool_weatherapi'],
+  '[StravaAPI_tool]': ['tool_stravaapi'],
+  '[ChartCreator_tool]': ['tool_chart'],
 
 };
 
@@ -71,7 +77,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
     
     // Check for agent START/FINISH events
     if (logMessage.includes('START:') || logMessage.includes('FINISH:')) {
-      const agentMatch = logMessage.match(/\[(PLANNER_AGENT|SCHEDULER_AGENT|STRAVA_AGENT)\]/);
+      const agentMatch = logMessage.match(/\[(PLANNER_AGENT|SCHEDULER_AGENT|STRAVA_AGENT|ANALYSER_AGENT)\]/);
       if (agentMatch) {
         const agentName = agentMatch[1].toLowerCase().replace('_agent', '');
         console.log('Agent name extracted:', agentName);
@@ -221,6 +227,8 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
             '[PLANNER_AGENT]',
             '[SCHEDULER_AGENT]',
             '[STRAVA_AGENT]',
+            '[ANALYSER_AGENT]',
+            '[ChartCreator_tool]',
             'START:',
             'FINISH:'
           ];
@@ -259,7 +267,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
   }, []);
 
   return (
-    <div className="stat-card agent-flow-card" style={{ width: 440, height: 250, minHeight: 250, padding: '2px 0 2px 0', paddingLeft: 0 }}>
+    <div className="stat-card agent-flow-card" style={{ width: 440, height: 300, minHeight: 250, padding: '2px 0 2px 0', paddingLeft: 0 }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

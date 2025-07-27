@@ -40,14 +40,16 @@ class PrintInterceptor:
         self.original_print = print
         self.interesting_patterns = [
             '[FRONTEND TO AGENT]',
+            '[PLANNER_AGENT]',
+            '[SCHEDULER_AGENT]',
+            '[STRAVA_AGENT]',
+            '[ANALYSER_AGENT]',
             '[FileReader_tool]',
             '[CalendarAPI_tool_create_event]',
             '[CalendarAPI_tool_list_events]',
             '[WeatherAPI_tool]',
             '[StravaAPI_tool]',
-            '[PLANNER_AGENT]',
-            '[SCHEDULER_AGENT]',
-            '[STRAVA_AGENT]'
+            '[ChartCreator_tool]',
         ]
     
     def __call__(self, *args, **kwargs):
