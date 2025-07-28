@@ -326,16 +326,24 @@ analyser_agent = Agent(
     **Input**: You will receive **two pieces of input**:
     1.  A list of lap data, provided as a JSON array of objects, where each object has "lap_index" and "pace" keys.
         * Example: ```json
-        {{  
+        {{
+            "activity_id": 15233791332,
             "laps": [
-                {{"lap_index": 1, "pace": 3.06}},
-                {{"lap_index": 2, "pace": 3.15}}
-            ]
+                {{"lap_index": 1, "pace": 3.46}},
+                {{"lap_index": 2, "pace": 3.48}},
+                {{"lap_index": 3, "pace": 3.47}},
+                {{"lap_index": 4, "pace": 3.5}},
+                {{"lap_index": 5, "pace": 3.45}},
+                {{"lap_index": 6, "pace": 3.55}},
+                {{"lap_index": 7, "pace": 3.47}},
+                {{"lap_index": 8, "pace": 3.56}}
+                ]
         }}
         ```
         * The "lap_index" will be an integer indicating the sequential order of the lap (starting from 1).
         * The "pace" will be a numerical value in **meters per second (m/s)** (a higher value means faster pace, a lower value means slower pace).
-    2.  An path of an image of the corresponding running chart.
+    2.  The activity_id: The ID of the activity to be analyzed, which you can use to retrieve the running chart image.
+        * The path to consider is: /app/uploads/running_chart_activity_[activity_id]_1.png
         * Use the `read_image_as_binary` tool to verify image file exists and get the correct paths
         * This chart will display black bars representing individual laps, with "Laps" on the x-axis and "Pace (meter per second)" on the y-axis.
         * A higher bar indicates a faster pace, and a lower bar indicates a slower pace.
@@ -407,7 +415,6 @@ analyser_agent = Agent(
     2. When you finish all steps: `agent_log("analyser_agent", "finish", "Successfully completed hybrid analysis operation")`
     3. If you encounter any errors: `agent_log("analyser_agent", "error", "Error occurred: [describe the error]")`
 
-    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     """,
     tools=[read_image_as_binary, agent_log],
 )
