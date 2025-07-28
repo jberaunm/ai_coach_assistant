@@ -8,36 +8,268 @@ import ReactFlow, {
   Node,
   Edge,
   Position,
+  NodeTypes,
+  Handle
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import type { Node as RFNode } from 'reactflow';
 
-const initialNodes: Node[] = [
-  { id: 'root', position: { x: -60, y: 120 }, data: { label: 'Root Agent\nGemini' }, type: 'input', style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 28, width: 200 }, sourcePosition: Position.Right },
-  { id: 'planner', position: { x: 250, y: 0 }, data: { label: 'Planner Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'scheduler', position: { x: 250, y: 120 }, data: { label: 'Scheduler Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'strava', position: { x: 250, y: 240 }, data: { label: 'Strava Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'analyser', position: { x: 250, y: 360 }, data: { label: 'Analyser Agent\nMistralAI' }, style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 26, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'tool_file_reader', position: { x: 560, y: -20 }, data: { label: 'FileReader tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: 'tool_weatherapi', position: { x: 560, y: 60 }, data: { label: 'WeatherAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'tool_calendarapi_list', position: { x: 560, y: 140 }, data: { label: 'CalendarAPI tool\nlist_events()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'tool_calendarapi_create', position: { x: 560, y: 260 }, data: { label: 'CalendarAPI tool\ncreate_event()' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'tool_stravaapi', position: { x: 560, y: 380 }, data: { label: 'StravaAPI tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-  { id: 'tool_chart', position: { x: 560, y: 460 }, data: { label: 'ChartCreator tool' }, style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 220 }, targetPosition: Position.Left },
-];
+// Custom RootNode component with multiple handles
+const RootNode: React.FC<{ data: { label: string } }> = ({ data }) => {
+  return (
+    <div style={{ 
+      background: '#cc785c', 
+      color: '#fff', 
+      borderRadius: 8, 
+      padding: 8, 
+      fontWeight: 600, 
+      fontSize: 24, 
+      width: 260,
+      position: 'relative'
+    }}>
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="root-top"
+        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="root-right"
+        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="root-bottom"
+        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="root-left"
+        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+      />
+      {data.label}
+    </div>
+  );
+};
 
-const initialEdges: Edge[] = [
-  { id: 'e1', source: 'root', target: 'planner', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
-  { id: 'e2', source: 'root', target: 'scheduler', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
-  { id: 'e3', source: 'root', target: 'strava', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
-  { id: 'e9', source: 'root', target: 'analyser', animated: false, style: { stroke: '#1565c0', strokeWidth: 4 } },
-  { id: 'e4', source: 'planner', target: 'tool_file_reader', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
-  { id: 'e5', source: 'scheduler', target: 'tool_weatherapi', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
-  { id: 'e6', source: 'scheduler', target: 'tool_calendarapi_list', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
-  { id: 'e7', source: 'scheduler', target: 'tool_calendarapi_create', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
-  { id: 'e8', source: 'strava', target: 'tool_stravaapi', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
-  { id: 'e10', source: 'analyser', target: 'tool_chart', animated: false, style: { stroke: '#a020f0', strokeWidth: 4 } },
-];
+// Define custom node types
+const nodeTypes: NodeTypes = {
+  rootNode: RootNode,
+};
+
+  const initialNodes: Node[] = [
+    { 
+      id: 'root', 
+      position: { x: -100, y: 190 }, 
+      data: { label: 'Root Agent\nLLM: Gemini-Flash-exp' }, 
+      type: 'rootNode', // Use custom node type
+      style: { background: '#cc785c', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 270 }
+      // Remove sourcePosition and targetPosition as they're now handled by custom handles
+    },
+    { 
+      id: 'planner', 
+      position: { x: 150, y: -30 }, 
+      data: { label: 'Planner Agent\nLLM: Mistral-Small' }, 
+      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 230 }, 
+      sourcePosition: Position.Right, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'scheduler', 
+      position: { x: 230, y: 80 }, 
+      data: { label: 'Scheduler Agent\nLLM: Mistral-Small' }, 
+      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 240 }, 
+      sourcePosition: Position.Right, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'strava', 
+      position: { x: 250, y: 190 }, 
+      data: { label: 'Strava Agent\nLLM: MistralAI' }, 
+      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 210 }, 
+      sourcePosition: Position.Right, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'analyser', 
+      position: { x: 230, y: 300 }, 
+      data: { label: 'Analyser Squential\nAgent' }, 
+      style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 220 },
+      targetPosition: Position.Left 
+    },
+    {
+      id: 'num_analyser', 
+      position: { x: 10, y: 430 }, 
+      data: { label: 'Num Analyser Agent\nLLM: Mistral-Small' }, 
+      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 22, width: 240 }, 
+      sourcePosition: Position.Right 
+    },
+    { 
+      id: 'vision_analyser', 
+      position: { x: 300, y: 430 }, 
+      data: { label: 'Vision Analyser Agent\nVLM: Pixtral-12B' }, 
+      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 22, width: 250 },  
+      sourcePosition: Position.Right, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'tool_file_reader', 
+      position: { x: 450, y: -60 }, 
+      data: { label: 'FileReader tool' }, 
+      style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 400, fontSize: 24, width: 220 }, 
+      sourcePosition: Position.Right, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'tool_weatherapi', 
+      position: { x: 510, y: 10 }, 
+      data: { label: 'WeatherAPI tool' }, 
+      style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 400, fontSize: 24, width: 220 }, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'tool_calendarapi_list', 
+      position: { x: 550, y: 80 }, 
+      data: { label: 'CalendarAPI tool\nlist_events()' }, 
+      style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 400, fontSize: 24, width: 220 }, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'tool_calendarapi_create', 
+      position: { x: 560, y: 190 }, 
+      data: { label: 'CalendarAPI tool\ncreate_event()' }, 
+      style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 400, fontSize: 24, width: 220 }, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'tool_stravaapi', 
+      position: { x: 550, y: 300 }, 
+      data: { label: 'StravaAPI tool' }, 
+      style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 400, fontSize: 24, width: 220 }, 
+      targetPosition: Position.Left 
+    },
+    { 
+      id: 'tool_chart', 
+      position: { x: 560, y: 370 }, 
+      data: { label: 'ChartCreator tool' }, 
+      style: { background: '#a020f0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 400, fontSize: 24, width: 220 }, 
+      targetPosition: Position.Left 
+    }
+  ];
+
+  const initialEdges: Edge[] = [
+    { 
+      id: 'e1', 
+      source: 'root', 
+      target: 'planner', 
+      sourceHandle: 'root-top', // Use the top handle from custom root node
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#1565c0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e2', 
+      source: 'root', 
+      target: 'scheduler', 
+      sourceHandle: 'root-right', // Use the right handle from custom root node
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#1565c0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e3', 
+      source: 'root', 
+      target: 'strava', 
+      sourceHandle: 'root-right', // Use the right handle from custom root node
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#1565c0', strokeWidth: 4 } 
+    },    { 
+      id: 'e4', 
+      source: 'root', 
+      target: 'analyser', 
+      sourceHandle: 'root-right', // Use the right handle from custom root node
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#1565c0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e5', 
+      source: 'planner', 
+      target: 'tool_file_reader', 
+      sourceHandle: 'right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#a020f0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e6', 
+      source: 'scheduler', 
+      target: 'tool_weatherapi', 
+      sourceHandle: 'right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#a020f0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e7', 
+      source: 'scheduler', 
+      target: 'tool_calendarapi_list', 
+      sourceHandle: 'right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#a020f0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e8', 
+      source: 'scheduler', 
+      target: 'tool_calendarapi_create', 
+      sourceHandle: 'right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#a020f0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e9', 
+      source: 'strava', 
+      target: 'tool_stravaapi', 
+      sourceHandle: 'right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#a020f0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e10', 
+      source: 'strava', 
+      target: 'tool_chart', 
+      sourceHandle: 'right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#a020f0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e11', 
+      source: 'analyser', 
+      target: 'num_analyser', 
+      sourceHandle: 'bottom', 
+      targetHandle: 'top',
+      animated: false, 
+      style: { stroke: '#1565c0', strokeWidth: 4 } 
+    },
+    { 
+      id: 'e12', 
+      source: 'num_analyser', 
+      target: 'vision_analyser', 
+      sourceHandle: 'root-right', 
+      targetHandle: 'left',
+      animated: false, 
+      style: { stroke: '#1565c0', strokeWidth: 4 } 
+    }
+  ];
 
 // Log pattern to node mapping
 const logPatternToNodes: { [key: string]: string[] } = {
@@ -45,7 +277,8 @@ const logPatternToNodes: { [key: string]: string[] } = {
   '[PLANNER_AGENT]': ['planner'],
   '[SCHEDULER_AGENT]': ['scheduler'],
   '[STRAVA_AGENT]': ['strava'],
-  '[ANALYSER_AGENT]': ['analyser'],
+  '[NUMERICAL_ANALYSER_AGENT]': ['num_analyser'],
+  '[VISION_ANALYSER_AGENT]': ['vision_analyser'],
   '[FileReader_tool]': ['tool_file_reader'],
   '[CalendarAPI_tool_create_event]': ['tool_calendarapi_create'],
   '[CalendarAPI_tool_list_events]': ['tool_calendarapi_list'],
@@ -220,6 +453,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
           const logPatterns = [
             '[FRONTEND TO AGENT]',
             '[FileReader_tool]',
+            '[ImageReader_tool]',
             '[CalendarAPI_tool_create_event]',
             '[CalendarAPI_tool_list_events]',
             '[WeatherAPI_tool]',
@@ -228,6 +462,8 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
             '[SCHEDULER_AGENT]',
             '[STRAVA_AGENT]',
             '[ANALYSER_AGENT]',
+            '[NUMERICAL_ANALYSER_AGENT]',
+            '[VISUAL_ANALYSER_AGENT]',
             '[ChartCreator_tool]',
             'START:',
             'FINISH:'
@@ -282,6 +518,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
         zoomOnScroll={false}
         zoomOnPinch={false}
         zoomOnDoubleClick={false}
+        nodeTypes={nodeTypes}
       >
         {/* <MiniMap /> and <Controls /> Removed for cleaner look */}
         <Background />
