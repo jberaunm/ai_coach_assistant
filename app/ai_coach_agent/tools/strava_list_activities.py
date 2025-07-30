@@ -370,8 +370,7 @@ def get_activity_complete(start_date: str) -> dict:
                 "total_laps": len(detailed_activity.laps) if detailed_activity.laps else 0,
                 "total_stream_points": 0,
                 "resolution": "low",
-                "series_type": "distance",
-                "available_streams": types
+                "series_type": "distance"
             },
             "data_points": {
                 "laps": [],
@@ -391,17 +390,9 @@ def get_activity_complete(start_date: str) -> dict:
                 cadence_spm = cadence_rpm * 2 if cadence_rpm and cadence_rpm > 0 else None
                 
                 lap_data = {
-                    "index": i,
                     "lap_index": lap.lap_index if lap.lap_index else i + 1,
                     "distance_meters": float(lap.distance) if lap.distance else None,
-                    "velocity_ms": velocity_ms,
-                    "heartrate_bpm": lap.average_heartrate if lap.average_heartrate else None,
-                    "max_heartrate_bpm": lap.max_heartrate if lap.max_heartrate else None,
-                    "cadence": cadence_spm,
-                    "elapsed_time": lap.elapsed_time if lap.elapsed_time else None,
-                    "moving_time": lap.moving_time if lap.moving_time else None,
-                    "total_elevation_gain": float(lap.total_elevation_gain),
-                    "max_speed": lap.max_speed if lap.max_speed else None
+                    "pace": velocity_ms,
                 }
                 activity_data["data_points"]["laps"].append(lap_data)
 
