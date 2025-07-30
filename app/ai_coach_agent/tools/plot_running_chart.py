@@ -268,3 +268,132 @@ def plot_running_chart(activity_id: int, save_path: Optional[str] = None) -> Dic
             "chart_path": None,
             "activity_info": None
         }
+
+def plot_running_chart_laps(activity_data: Dict[str, Any], save_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Create a running chart from activity data provided as JSON.
+    
+    Args:
+        activity_data: Dictionary containing activity data with structure:
+            {
+                "activity_id": int,
+                "laps": [
+                    {
+                        "lap_index": int,
+                        "pace": float,
+                        "segment": str
+                    },
+                    ...
+                ]
+            }
+        save_path: Optional path to save the chart image (e.g., "running_chart.png")
+                  If not provided, saves to app/uploads/ directory with default name
+        
+    Returns:
+        Dict containing:
+            - status: "success" or "error"
+            - message: Description of the result
+            - chart_path: Path to the saved chart image
+            - activity_info: Summary of the activity
+    """
+    try:
+        activity_id = activity_data.get("activity_id")
+        print(f"[ChartCreator_tool] START: Creating running chart for activity {activity_id}")
+        
+        # Extract laps data from the input
+        laps_data = activity_data.get("laps", [])
+        
+        if not laps_data:
+            return {
+                "status": "error",
+                "message": "No laps data available for this activity",
+                "chart_path": None,
+                "activity_info": None
+            }
+        
+        # Convert laps data to DataFrame
+        laps_df = pd.DataFrame(laps_data)
+        
+        # Sort by lap_index to ensure correct order
+        laps_df = laps_df.sort_values('lap_index')
+        
+        # Create the bar chart
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        unique_segments = laps_df['segment'].unique()
+        
+        # Create color mapping for segments with fallback colors
+        default_colors = ['red', 'green', 'blue', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8']
+        color_map = {}
+        for i, segment in enumerate(unique_segments):
+            if segment == 'Warm up':
+                color_map[segment] = 'red'  # Red
+            elif segment == 'Main session':
+                color_map[segment] = 'green'  # Green
+            elif segment == 'Cool down':
+                color_map[segment] = 'blue'  # Blue
+            else:
+                color_map[segment] = default_colors[i % len(default_colors)]
+        
+        # Create bars with colors based on segment
+        bars = ax.bar(laps_df['lap_index'], laps_df['pace'], 
+                     color=[color_map[segment] for segment in laps_df['segment']], 
+                     width=0.5, alpha=0.8)
+        
+        # Customize the chart
+        ax.set_ylabel('Pace (min/km)', color='black')
+        ax.set_xlabel('Laps', color='black')
+        ax.tick_params(axis='y', labelcolor='black')
+        ax.grid(True, color='gray', linestyle='-.', linewidth=0.6, alpha=0.8, which='major')
+        
+        # Set y-axis limits
+        max_pace = laps_df['pace'].max()
+        min_pace = laps_df['pace'].min()
+        ax.set_ylim(min_pace * 0.7, max_pace * 1.05)
+        
+        # Add legend for segments
+        legend_elements = [plt.Rectangle((0,0),1,1, facecolor=color_map[segment], alpha=0.8, label=segment) 
+                          for segment in unique_segments]
+        ax.legend(handles=legend_elements, loc='upper right')
+        
+        plt.tight_layout()
+        
+        # Determine save path
+        if save_path:
+            chart_path = save_path
+        else:
+            # Get the uploads directory path
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            app_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            uploads_dir = os.path.join(app_dir, "app", "uploads")
+            
+            # Create uploads directory if it doesn't exist
+            os.makedirs(uploads_dir, exist_ok=True)
+            
+            # Generate default filename
+            chart_path = os.path.join(uploads_dir, f"running_chart_activity_{activity_id}_laps.png")
+        
+        # Save the chart
+        plt.savefig(chart_path, dpi=300, bbox_inches='tight')
+        print(f"Chart saved to: {chart_path}")
+
+        print(f"Successfully created running chart for activity {activity_id}")
+        return {
+            "status": "success",
+            "message": f"Successfully created running chart for activity {activity_id}",
+            "chart_path": chart_path,
+            "activity_info": {
+                "activity_id": activity_id,
+                "total_laps": len(laps_data),
+                "segments": list(unique_segments)
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error creating running chart: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Error creating running chart: {str(e)}",
+            "chart_path": None,
+            "activity_info": None
+        }

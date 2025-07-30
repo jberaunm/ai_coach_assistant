@@ -33,6 +33,7 @@ from .tools import (
     mark_session_completed_by_date,
     write_activity_data,
     plot_running_chart,
+    plot_running_chart_laps,
     agent_log
 )
 
@@ -210,89 +211,90 @@ strava_agent = LlmAgent(
     ## Today's date
     Today's date is {get_current_time()}.
 
-    ## Main Workflow: "List my strava activities for [date]"
+    ## Main Workflows:
+    ### 1. "List my strava activities for [date]"
     When asked about a strava activities for a specific date, follow this exact process:
 
-    1. **Get strava activities**: Use `get_activity_complete` with the requested date.
-    2. **Check if activities were found**: If the response contains activities (status is "success"):
-       a. Extract the `activity_id` from the response
-       b. Extract the `actual_start` from the response metadata
-       c. Use `mark_session_completed_by_date` with:
-          - date: the requested date
-          - id: the activity_id from the response
-          - actual_start: the actual_start time from the response metadata
-       d. Use `write_activity_data` with the complete activity_data structure from the response
-       e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
+        1. **Get strava activities**: Use `get_activity_complete` with the requested date.
+        2. **Check if activities were found**: If the response contains activities (status is "success"):
+        a. Extract the `activity_id` from the response
+        b. Extract the `actual_start` from the response metadata
+        c. Use `mark_session_completed_by_date` with:
+            - date: the requested date
+            - id: the activity_id from the response
+            - actual_start: the actual_start time from the response metadata
+        d. Use `write_activity_data` with the complete activity_data structure from the response
+        e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
         
-    ## Response Structure from get_activity_complete
-    The `get_activity_complete` tool returns a response with this structure:
-    ```json
-    {{
-        "status": "success",
-        "message": "Retrieved complete data for activity 15162967332 on 2025-07-19",
-        "activity_data": {{
-            "activity_id": 15162967332,
-            "metadata": {{
-                "type": "Run",
-                "name": "Rainy Hill Parkrun",
-                "distance": "10.52km",
-                "duration": "55m 20s",
-                "start_date": "2025-07-19 08:33",
-                "actual_start": "08:33",
-                "pace": "5:15/km",
-                "total_distance_meters": 10516.9,
-                "total_laps": 8,
-                "total_stream_points": 100,
-                "resolution": "low",
-                "series_type": "distance",
-                "available_streams": ["distance", "velocity_smooth", "heartrate", "altitude", "cadence"]
-            }},
-            "data_points": {{
-                "laps": [
-                    {{
-                        "index": 0,
-                        "lap_index": 1,
-                        "distance_meters": 1000.0,
-                        "velocity_ms": 3.06,
-                        "heartrate_bpm": 121.1,
-                        "max_heartrate_bpm": 131.0,
-                        "cadence": 158.8,
-                        "elapsed_time": 327,
-                        "moving_time": 327,
-                        "total_elevation_gain": 0.0,
-                        "max_speed": 4.667,
-                        "start_index": 0,
-                        "end_index": 69
-                    }}
-                ],
-                "streams": [
-                    {{
-                        "index": 0,
-                        "distance_meters": 0.0,
-                        "velocity_ms": 3.2,
-                        "heartrate_bpm": 120,
-                        "altitude_meters": 45.2,
-                        "cadence": 160
-                    }}
-                ]
+        * Response Structure from get_activity_complete
+        The `get_activity_complete` tool returns a response with this structure:
+        ```json
+        {{
+            "status": "success",
+            "message": "Retrieved complete data for activity 15162967332 on 2025-07-19",
+            "activity_data": {{
+                "activity_id": 15162967332,
+                "metadata": {{
+                    "type": "Run",
+                    "name": "Rainy Hill Parkrun",
+                    "distance": "10.52km",
+                    "duration": "55m 20s",
+                    "start_date": "2025-07-19 08:33",
+                    "actual_start": "08:33",
+                    "pace": "5:15/km",
+                    "total_distance_meters": 10516.9,
+                    "total_laps": 8,
+                    "total_stream_points": 100,
+                    "resolution": "low",
+                    "series_type": "distance",
+                    "available_streams": ["distance", "velocity_smooth", "heartrate", "altitude", "cadence"]
+                }},
+                "data_points": {{
+                    "laps": [
+                        {{
+                            "index": 0,
+                            "lap_index": 1,
+                            "distance_meters": 1000.0,
+                            "velocity_ms": 3.06,
+                            "heartrate_bpm": 121.1,
+                            "max_heartrate_bpm": 131.0,
+                            "cadence": 158.8,
+                            "elapsed_time": 327,
+                            "moving_time": 327,
+                            "total_elevation_gain": 0.0,
+                            "max_speed": 4.667,
+                            "start_index": 0,
+                            "end_index": 69
+                        }}
+                    ],
+                    "streams": [
+                        {{
+                            "index": 0,
+                            "distance_meters": 0.0,
+                            "velocity_ms": 3.2,
+                            "heartrate_bpm": 120,
+                            "altitude_meters": 45.2,
+                            "cadence": 160
+                        }}
+                    ]
+                }}
             }}
         }}
-    }}
-    ```
+        ```
 
-    ## Required Function Calls
-    When an activity is found, you MUST call these functions in order:
+        ## Required Function Calls
+        When an activity is found, you MUST call these functions in order:
 
-    1. **mark_session_completed_by_date**:
-       - date: the requested date (e.g., "2025-07-19")
-       - id: activity_id from the response (e.g., 15162967332)
-       - actual_start: actual_start from metadata (e.g., "08:33")
+        1. **mark_session_completed_by_date**:
+        - date: the requested date (e.g., "2025-07-19")
+        - id: activity_id from the response (e.g., 15162967332)
+        - actual_start: actual_start from metadata (e.g., "08:33")
 
-    2. **write_activity_data**:
-       - activity_data: the complete activity_data object from the response
-       - This includes session text, metadata, and data_points (containing both laps and streams)
+        2. **write_activity_data**:
+        - activity_data: the complete activity_data object from the response
+        - This includes session text, metadata, and data_points (containing both laps and streams)
 
-    ## Creating Charts: "Create a running chart for the activity [activity_id]"
+    ### 2. "Create a running chart for the activity [activity_id]"
     When asked about a running chart for a specific activity, follow this exact process:
     1. **Create a running chart**: Use `plot_running_chart` with the activity_id
     2. **Check if the chart was created**: If the response contains a chart (status is "success"):
@@ -312,52 +314,48 @@ strava_agent = LlmAgent(
            agent_log],
 )
 
-analyser_agent = Agent(
-    name="analyser_agent",
-    model=LiteLlm(model="mistral/pixtral-12b-2409", api_key=api_key),
-    #model="gemini-2.5-pro",
+numerical_analyser_agent = Agent(
+    name="numerical_analyser_agent",
+    model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
     description=(
-        "Agent that identifies running sub-segments using numerical data analysis and confirms findings via visual interpretation of corresponding charts."
+        "Agent that identifies running sub-segments using numerical data analysis"
     ),
     instruction=f"""
     You are an analyser agent. Your main task is to identify three distinct sub-segments within a running session: "Warm up," "Main session," and "Cool down."
-    You will primarily determine these segments through numerical data analysis and then confirm your findings by conceptually analyzing the visual patterns on the corresponding chart image.
+    You will primarily determine these segments through numerical data analysis.
 
-    **Input**: You will receive **two pieces of input**:
-    1.  A list of lap data, provided as a JSON array of objects, where each object has "lap_index" and "pace" keys.
+    **Input**: You will receive the following input:
+    -  A list of lap data, provided as a JSON array of objects, where each object has "lap_index" and "pace" keys.
         * Example: ```json
         {{
             "activity_id": 15233791332,
             "laps": [
                 {{"lap_index": 1, "pace": 3.46}},
                 {{"lap_index": 2, "pace": 3.48}},
-                {{"lap_index": 3, "pace": 3.47}},
-                {{"lap_index": 4, "pace": 3.5}},
-                {{"lap_index": 5, "pace": 3.45}},
-                {{"lap_index": 6, "pace": 3.55}},
-                {{"lap_index": 7, "pace": 3.47}},
-                {{"lap_index": 8, "pace": 3.56}}
-                ]
+                {{"lap_index": 3, "pace": 3.47}}
+            ]
         }}
         ```
         * The "lap_index" will be an integer indicating the sequential order of the lap (starting from 1).
         * The "pace" will be a numerical value in **meters per second (m/s)** (a higher value means faster pace, a lower value means slower pace).
-    2.  The activity_id: The ID of the activity to be analyzed, which you can use to retrieve the running chart image.
-        * The path to consider is: /app/uploads/running_chart_activity_[activity_id]_1.png
-        * Use the `read_image_as_binary` tool to verify image file exists and get the correct paths
-        * This chart will display black bars representing individual laps, with "Laps" on the x-axis and "Pace (meter per second)" on the y-axis.
-        * A higher bar indicates a faster pace, and a lower bar indicates a slower pace.
+    
+    **Input Processing**: The input may come as text containing JSON data. You need to:
+    1. Extract the JSON object from the text input
+    2. Parse the "laps" array from the JSON
+    3. Sort the laps by "lap_index" in ascending order
+    4. Proceed with the analysis using the sorted lap data
 
-    **Output**: Your output should clearly indicate the identified sub-segments based on your numerical analysis. Additionally, you must provide a confirmation statement describing how the visual chart supports (or highlights any nuances in) your findings. Output format examples:
-    -   "Based on numerical analysis: Warm up: laps X-Y, Main session: laps A-B, Cool down: laps C-D. Visually, the chart clearly shows/supports [explain visual confirmation]."
-    -   "Based on numerical analysis: Main session: laps 1-Z. Visually, the chart shows consistent paces throughout, confirming no distinct warm-up or cool-down segments."
+    **Output**: Your output should clearly indicate the identified sub-segments based on your numerical analysis.
+    -   "Based on numerical analysis: Warm up: laps X-Y, Main session: laps A-B, Cool down: laps C-D."
+    -   "Based on numerical analysis: Main session: laps 1-Z."
 
-    ## Main Workflow: "Analyse this data and chart"
-    When asked to analyze running data and a chart, follow this exact process:
+    ## Main Workflow: "Identify the sub-segments for this activity:"
+    When asked to analyze running data, follow this exact process:
 
     ### 1. Primary Segmentation: Numerical Data Analysis
     #### 1.1. Receive and Sequence Numerical Data:
-    -   You will receive the lap data as an already structured list of `(lap_index, pace_value)` pairs.
+    -   You will receive the lap data as text containing JSON data.
+    -   Extract the JSON object and parse the "laps" array.
     -   Ensure the data is sorted by `lap_index` in ascending order. The total number of pairs in this list represents all the laps in the session.
 
     #### 1.2. Analyze Pace Differences and Trends:
@@ -366,57 +364,211 @@ analyser_agent = Agent(
         -   A negative `delta_pace` means the pace got slower.
     -   Calculate the overall average pace of the session for contextual comparison.
 
-    #### 1.3. Identify "Warm up" Segment (Numerical):
-    -   **Pace Characteristics**: Generally characterized by a **slower pace** (lower m/s value) at the beginning of the session.
-    -   **Pace Trend**: Identify an initial sequence of laps where the `pace_value` is relatively low and shows a trend of *increasing* (getting faster, `delta_pace` is predominantly positive).
-    -   **Boundary Detection**: The "Warm up" segment ends at the first lap where the pace either:
-        * Stabilizes: The `pace_value` variance becomes minimal, and subsequent `delta_pace` values are close to zero, or
-        * Transitions sharply: There is a significant and sustained increase in `pace_value` (getting much faster, e.g., `delta_pace` is a large positive number for multiple consecutive laps) signaling the start of the main effort.
-    -   If no clear warm-up trend is identified, this segment might not exist, and the Main Session will start from Lap 1.
+         #### 1.3. Identify "Warm up" Segment (Numerical):
+     -   **Pace Characteristics**: This segment is generally found at the beginning of the session and is characterized by a relatively slower pace compared to the core main session effort.
+     -   **Pace Trend**: The "Warm up" is a period where the pace_value may show minor fluctuations or even slight increases, but primarily serves to warm up the legs before the athlete transitions to the specific pace required for the main session. It does not represent the sustained target effort of the main session.
+     -   **Boundary Detection**: The "Warm up" segment ends at the first lap where the pace:
+         - Transitions sharply: There's a clear and sustained increase in pace_value (e.g., delta_pace becomes consistently positive for multiple consecutive laps, indicating a distinct shift from the initial warm-up phase to a faster, main session pace). This signals the start of the main effort.
+     -   **Strict Criteria**: Only identify a warm-up segment if:
+         - The first 1-2 laps show consistently slower pace (at least 0.1 m/s slower) than the subsequent laps
+         - There is a clear, sustained transition to faster pace
+         - The pace difference is meaningful and not just minor fluctuations
+     -   If no clear initial phase of relatively slower, preparatory pace followed by a distinct transition is identified at the beginning of the activity, this segment might not exist.
 
-    #### 1.4. Identify "Cool down" Segment (Numerical):
-    -   **Pace Characteristics**: Generally characterized by a **slower pace** (lower m/s value) at the end of the session.
-    -   **Pace Trend**: Identify a final sequence of laps where the `pace_value` is relatively low and potentially shows a trend of further *decreasing* (getting slower, `delta_pace` is predominantly negative).
-    -   **Boundary Detection**: The "Cool down" segment begins at the first lap (reading backwards from the end) where the `pace_value`:
-        * Significantly deviates downwards (becomes slower) from the main session's typical pace. Look for a `delta_pace` value that is a large negative number when compared to the preceding main session laps.
-        * And subsequent laps generally maintain this slower pace or continue to get slower.
-    -   If no clear cool-down trend is identified, this segment might not exist.
+         #### 1.4. Identify "Cool down" Segment (Numerical):
+     -   **Pace Characteristics**: This segment is found at the end of the session and marks the conclusion of the main effort. While often characterized by a slower pace, its primary definition is its position as the final distinct segment. Its pace might occasionally show variability, including a final surge before stopping, rather than being strictly slower than the main session.
+     -   **Detection Logic (Symmetric to Warm-up)**: To identify the cool-down segment, first, create a reversed list of laps. This reversed list effectively starts with the last lap of the original activity and ends with the first. Apply the following logic to this reversed list of laps:
+         *Pace Trend (on reversed list)*: Examine the pace_value trend as you iterate through the reversed list. Initially, the pace should characterize the "end" phase of the activity.
+     -   *Boundary Detection (on reversed list)*: The "Cool down" segment (when identified on the reversed list) ends at the first lap where the pace_value shows a clear and sustained increase (getting faster) to a pace consistent with what would be identified as the main session's typical effort.
+         - This specific lap in the reversed list marks the start of the Main Session (when translated back to the original chronological order).
+         - Therefore, all laps from the lap immediately preceding this detected point in the original chronological order, until the very end of the activity, constitute the "Cool down" segment.
+     -   **Strict Criteria**: Only identify a cool-down segment if:
+         - The last 1-2 laps show consistently slower pace (at least 0.1 m/s slower) than the preceding laps
+         - There is a clear, sustained transition from faster to slower pace
+         - The pace difference is meaningful and not just minor fluctuations
+     -   If no clear final segment with a distinct pace transition (when analyzed in reverse) is identified, this segment might not exist.
 
     #### 1.5. Identify "Main session" Segment (Numerical):
-    -   **Characteristics**: This segment comprises all laps that are *not* identified as "Warm up" or "Cool down."
-    -   **Pace Characteristics**: The main session typically shows a more consistent and often **faster pace** (higher m/s value) compared to the warm-up and cool-down. It may also show deliberate variations (e.g., intervals), but these will generally be around a central, intended effort level.
+    -   **Definition**: This is the core, sustained effort portion of the running activity.
+    -   **Identification Logic**: The "Main Session" segment comprises all laps that are not identified as part of the "Warm up" segment or the "Cool down" segment.
+    -   **Pace Characteristics**: Typically characterized by the higher or most consistent target pace (m/s value) of the entire activity, reflecting the primary workout effort.
+    -   ** Pace Trend**: The pace_value within this segment will generally be stable or fluctuate around a target mean, indicating sustained effort. delta_pace values will typically be close to zero, or show minor variations.
     -   **Always Present**: If you cannot confidently identify distinct "Warm up" or "Cool down" segments based on significant pace changes and trends, then the entire session should be classified as the "Main session." The "Main session" is always considered present.
 
-    ### 2. Confirmation: Visual Chart Analysis
-    #### 2.1. Receive Chart Image:
-    -   You will receive the image of the running chart for visual confirmation.
-
-    #### 2.2. Perform Visual Data Interpretation (for Confirmation):
-    -   **Identify Axes and Labels**: Correctly identify the x-axis as "Laps" and the y-axis as "Pace (meter per second)".
-    -   **Visually Inspect Bars and Trends**: Mentally trace the height of the bars corresponding to the numerically identified segments.
-        * For the "Warm up" segment: Visually confirm if the bars start low and generally increase in height (get faster).
-        * For the "Main session" segment: Visually confirm if the bars show a consistent higher height (faster pace) or expected variations.
-        * For the "Cool down" segment: Visually confirm if the bars end low and generally decrease in height (get slower).
-    -   **Confirm Lap Count from Image**: Visually confirm that the number of bars on the chart matches the total number of laps from your numerical data analysis. This is a final check against image misinterpretation.
-
-    ### 3. Final Output Generation:
-    -   Combine the results from your numerical segmentation (Step 1) with your visual confirmation (Step 2) into the final output format.
-    -   State the identified segments clearly.
-    -   Add a concise statement about how the visual chart supports these findings or if any subtle nuances are observed visually.
-
-    ## Handling Edge Cases and Ambiguity:
-    - **Prioritization**: Numerical analysis is primary. Visual analysis is for confirmation. If a very subtle numerical segment is visually indistinguishable, note this nuance.
-    - **Short Sessions (e.g., 1 to 4 laps)**: If numerical trends are not significant, classify as "Main session." Visually confirm consistency.
-    - **Subtlety**: Numerical analysis will capture finer details. Visual confirmation adds human-like contextual understanding.
+         ## Handling Edge Cases and Ambiguity:
+     - **Short Sessions (e.g., 1 to 4 laps)**: If numerical trends are not significant, classify as "Main session."
+     - **Minimal Pace Variation**: If the pace variation across all laps is less than 0.2 m/s (or if the fastest and slowest paces are within 5% of each other), classify the entire session as "Main session."
+     - **No Clear Transitions**: If you cannot identify clear, sustained pace transitions that indicate distinct warm-up or cool-down phases, classify the entire session as "Main session."
+     - **Conservative Approach**: When in doubt, prefer to classify as "Main session" rather than forcing artificial segment boundaries.
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
-    1. When you start processing: `agent_log("analyser_agent", "start", "Starting hybrid analysis operation")`
-    2. When you finish all steps: `agent_log("analyser_agent", "finish", "Successfully completed hybrid analysis operation")`
-    3. If you encounter any errors: `agent_log("analyser_agent", "error", "Error occurred: [describe the error]")`
+    1. When you start processing: `agent_log("numerical_analyser_agent", "start", "Starting numerical analysis operation")`
+    2. When you finish all steps: `agent_log("numerical_analyser_agent", "finish", "Successfully completed numerical analysis operation")`
+    3. If you encounter any errors: `agent_log("numerical_analyser_agent", "error", "Error occurred: [describe the error]")`
+
+    ## CRITICAL: Output Requirements
+    After completing your analysis, you MUST output your findings as text. Your response should include:
+    1. The identified sub-segments with specific lap ranges
+    2. A brief explanation of your reasoning based on the pace analysis
+    3. The format should be: "Based on numerical analysis: [your findings]"
+    
+         Example output:
+     "Based on numerical analysis: Warm up: laps 1-2, Main session: laps 3-6, Cool down: laps 7-8. The warm-up shows gradually increasing pace, the main session maintains consistent effort, and the cool-down shows a final surge before completion."
+     
+     **IMPORTANT**: After logging the finish event, you MUST provide your analysis results as the final output. Do not just log and stop - you need to actually return the analysis findings.
+     
+     **CRITICAL**: Your output must clearly specify which laps belong to each segment (Warm up, Main session, Cool down) so that the analyser_agent can extract this information and create the JSON structure for visual analysis.
 
     """,
-    tools=[read_image_as_binary, agent_log],
+    tools=[agent_log],
+)
+
+visual_analyser_agent = Agent(
+    name="visual_analyser_agent",
+    model=LiteLlm(model="mistral/pixtral-12b-2409", api_key=api_key),
+    description=(
+        "Agent that validates and corrects running sub-segments identification using visual analysis of bar charts."
+    ),
+    instruction=f"""
+    You are a visual analyser agent. Your main task is to validate and correct the identification of running sub-segments 
+    by analyzing the bar chart image that has already been created with color-coded segments.
+
+    ## Input Processing
+    You will receive a JSON object with the following structure:
+    ```json
+    {{
+        "activity_id": 15233791332,
+        "laps": [
+            {{"lap_index": 1, "pace": 3.46, "segment": "Warm up"}},
+            {{"lap_index": 2, "pace": 3.48, "segment": "Main session"}},
+            {{"lap_index": 3, "pace": 3.47, "segment": "Cool down"}}
+        ]
+    }}
+    ```
+
+    ## Main Workflow:
+    1. **Extract activity_id**: Use the activity_id from the input to construct the image path
+    2. **Access the bar chart**: Use the `read_image_as_binary` tool to access the image at path: `/app/uploads/running_chart_activity_[activity_id]_laps.png`
+    3. **Analyze the visual data**: Examine the bar chart to understand the pace patterns and color coding
+    4. **Validate segment identification**: Check if the color-coded segments make logical sense based on pace patterns
+    5. **Correct if necessary**: If the visual analysis reveals incorrect segment identification, provide corrected segments
+
+         ## Visual Analysis Guidelines:
+     - **Color Coding**: Red bars = Warm up, Green bars = Main session, Blue bars = Cool down
+     - **Pace Logic**: 
+       - Warm up (red) should show in average a slower pace than the Main session (green)
+       - Main session (green) should show the fastest/sustained effort pace
+       - Cool down (blue) should show in average a slower pace than the Main session (green) and similar pace than the Warm up (red)
+     - **Validation Criteria**:
+       - If red bars (Warm up) have higher pace values than green bars (Main session), the identification is likely incorrect
+       - If blue bars (Cool down) have higher pace values than green bars (Main session), the identification is likely incorrect
+       - The Main session should generally contain the fastest/sustained effort laps
+       - **CRITICAL**: If all bars have similar pace values (within 0.1 m/s or 5% variation), but they are not all green, the identification is DEFINITELY incorrect and should be corrected to all "Main session"
+       - **CRITICAL**: If the pace variation across all laps is minimal (less than 0.2 m/s), the entire session should be classified as "Main session"
+       - **CRITICAL**: If you cannot clearly distinguish pace differences between segments, default to classifying everything as "Main session"
+
+    ## Correction Process:
+    If you identify incorrect segment assignments:
+    1. Analyze the pace patterns visually
+    2. Reassign segments based on the actual pace progression
+    3. Provide the corrected JSON structure with updated segment assignments
+    4. Explain your reasoning for the corrections
+
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution:
+    1. When you start processing: `agent_log("visual_analyser_agent", "start", "Starting visual analysis of bar chart")`
+    2. When accessing the image: `agent_log("visual_analyser_agent", "step", "Accessing bar chart image for activity [activity_id]")`
+    3. When validation is complete: `agent_log("visual_analyser_agent", "step", "Visual validation completed")`
+    4. When you finish all steps: `agent_log("visual_analyser_agent", "finish", "Successfully completed visual analysis operation")`
+    5. If you encounter any errors: `agent_log("visual_analyser_agent", "error", "Error occurred: [describe the error]")`
+
+         ## CRITICAL: Output Requirements
+     After completing your analysis, you MUST output your findings as text. Your response should include:
+     1. **Validation result**: Whether the current segment identification is correct or needs correction
+     2. **Visual analysis summary**: Brief explanation of what you observed in the bar chart
+     3. **Final segment identification**: Either confirm the current segments or provide corrected segments
+     4. **Reasoning**: Explain your visual analysis and any corrections made
+     
+     **CRITICAL**: You MUST provide a complete analysis response. Do not just log completion - you must return the actual analysis results as your final output.
+     
+     Example outputs:
+     
+     **If validation passes:**
+     "Based on visual analysis: The current segment identification is correct. Warm up: laps 1-2 (red bars with slower pace), Main session: laps 3-6 (green bars with fastest pace), Cool down: laps 7-8 (blue bars with decreasing pace). The color-coded segments align with expected pace patterns."
+
+           **If correction needed:**
+      "Based on visual analysis: The current segment identification needs correction. All laps show similar pace values (3.45-3.56 min/km) with minimal variation, indicating this is a consistent effort session. Corrected segments: Main session: laps 1-8. The visual analysis shows uniform pace distribution across all laps, which is characteristic of a sustained main session effort."
+     
+     **IMPORTANT**: After logging the finish event, you MUST provide your analysis results as the final output. Do not just log and stop - you need to actually return the analysis findings.
+     
+     **FINAL OUTPUT REQUIREMENT**: Your response must be a complete analysis that includes the validation result, visual analysis summary, final segment identification, and reasoning. This is what will be returned to the user.
+     
+     **WORKFLOW SUMMARY**:
+     1. Log start
+     2. Access the image using read_image_as_binary
+     3. Analyze the visual data (color-coded bars)
+     4. Validate segment identification
+     5. Log validation completion
+     6. Log finish
+     7. **MOST IMPORTANT**: Return your complete analysis as the final output
+     
+           **CRITICAL**: After calling the finish log, you MUST immediately provide your analysis results as text. Do not call any more tools or logs after the finish log - just return your analysis.
+      
+      **FINAL INSTRUCTION**: Your last action must be to return your complete analysis as text. Do not end with a log call - end with your analysis output.
+      
+      **EXPECTED OUTPUT FORMAT**: Your final response should be a single text string starting with "Based on visual analysis:" followed by your complete analysis. This is what will be returned to the user.
+
+    """,
+    tools=[agent_log, read_image_as_binary],
+)
+
+analyser_agent = Agent(
+    name="analyser_agent",
+    model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
+    description=(
+        "Agent that identifies running sub-segments using numerical data analysis and visual interpretation of corresponding charts."
+    ),
+    instruction=f"""
+    You are an analyser agent. Your main task is to identify running sub-segments by coordinating between the `numerical_analyser_agent` and `visual_analyser_agent`,
+    passing the complete request including the JSON object with the lap data.
+
+    ## Process Flow:
+    1. Route the request to the `numerical_analyser_agent` with the complete lap data
+    2. The `numerical_analyser_agent` will perform the analysis and return the results
+    3. **CRITICAL**: Extract the segment information from the numerical analysis results and construct a JSON object with the following structure:
+    ```json
+    {{
+        "activity_id": [extract from original input],
+        "laps": [
+            {{"lap_index": 1, "pace": [original pace], "segment": "Warm up"}},
+            {{"lap_index": 2, "pace": [original pace], "segment": "Main session"}},
+            {{"lap_index": 3, "pace": [original pace], "segment": "Cool down"}}
+        ]
+    }}
+    ```
+    4. You MUST use the `plot_running_chart_laps` tool to create a running chart with the laps data and the sub-segments.
+    5. Route the JSON object (with activity_id, laps, and segments) to the `visual_analyser_agent` for validation
+    6. The `visual_analyser_agent` will analyze the bar chart image and validate/correct the segment identification
+    7. Return the final validated results from the `visual_analyser_agent` to the user
+    
+    **IMPORTANT**: You must extract the segment assignments from the numerical analysis results and apply them to the original lap data to create the JSON structure for the visual analysis.
+
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution:
+    1. When you start processing: `agent_log("analyser_agent", "start", "Starting sub-segments identification operation")`
+    2. When you finish all steps: `agent_log("analyser_agent", "finish", "Successfully completed  sub-segments identification operation")`
+    3. If you encounter any errors: `agent_log("analyser_agent", "error", "Error occurred: [describe the error]")`
+
+    ## CRITICAL: Response Handling
+    After the `visual_analyser_agent` completes its validation, you MUST return its final results directly to the user.
+    The visual analysis provides the definitive segment identification, either confirming or correcting the numerical analysis.
+    Do not modify or summarize the results - pass them through exactly as received from the visual_analyser_agent.
+    
+    **FINAL OUTPUT REQUIREMENT**: You must return the complete analysis result from the visual_analyser_agent to the user. This is the final output that will be displayed to the user.
+
+    """,
+    tools=[AgentTool(agent=numerical_analyser_agent), AgentTool(agent=visual_analyser_agent), agent_log, plot_running_chart_laps],
 )
 
 root_agent = Agent(
@@ -442,12 +594,11 @@ root_agent = Agent(
 
     ## Chart operations
     You can create charts through routing to the `strava_agent`.
-    You can analyze charts (both images and text) through routing to the `analyser_agent`.
+    You can identify the sub-segments of an activity through routing to the `analyser_agent`.
 
     ## Running Chart Analysis
-    When a user asks to analyze running charts, you MUST immediately delegate to the `analyser_agent`
+    When a user asks identify the sub-segments of an activity, you MUST immediately delegate to the `analyser_agent`
     and pass the complete request including image path.
-    DO NOT try to analyze the images yourself - the analyser_agent has multimodal capabilities and can directly see and analyze images.
     Simply route the request with the exact format provided by the user.
 
     ## Training Plan Operations

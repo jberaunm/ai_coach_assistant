@@ -44,6 +44,8 @@ class PrintInterceptor:
             '[SCHEDULER_AGENT]',
             '[STRAVA_AGENT]',
             '[ANALYSER_AGENT]',
+            '[NUMERICAL_ANALYSER_AGENT]',
+            '[VISUAL_ANALYSER_AGENT]',
             '[FileReader_tool]',
             '[CalendarAPI_tool_create_event]',
             '[CalendarAPI_tool_list_events]',

@@ -97,9 +97,8 @@ const nodeTypes: NodeTypes = {
     { 
       id: 'analyser', 
       position: { x: 230, y: 300 }, 
-      data: { label: 'Analyser Squential\nAgent' }, 
-      style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 220 },
-      targetPosition: Position.Left 
+      data: { label: 'Analyser\nAgent' }, 
+      style: { background: '#4e9cea', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 200 }
     },
     {
       id: 'num_analyser', 
@@ -114,7 +113,6 @@ const nodeTypes: NodeTypes = {
       data: { label: 'Vision Analyser Agent\nVLM: Pixtral-12B' }, 
       style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 22, width: 250 },  
       sourcePosition: Position.Right, 
-      targetPosition: Position.Left 
     },
     { 
       id: 'tool_file_reader', 
@@ -244,9 +242,9 @@ const nodeTypes: NodeTypes = {
     },
     { 
       id: 'e10', 
-      source: 'strava', 
+      source: 'analyser', 
       target: 'tool_chart', 
-      sourceHandle: 'right', 
+      sourceHandle: 'root-right', 
       targetHandle: 'left',
       animated: false, 
       style: { stroke: '#a020f0', strokeWidth: 4 } 
@@ -262,10 +260,10 @@ const nodeTypes: NodeTypes = {
     },
     { 
       id: 'e12', 
-      source: 'num_analyser', 
+      source: 'analyser', 
       target: 'vision_analyser', 
-      sourceHandle: 'root-right', 
-      targetHandle: 'left',
+      sourceHandle: 'bottom', 
+      targetHandle: 'top',
       animated: false, 
       style: { stroke: '#1565c0', strokeWidth: 4 } 
     }
@@ -277,6 +275,7 @@ const logPatternToNodes: { [key: string]: string[] } = {
   '[PLANNER_AGENT]': ['planner'],
   '[SCHEDULER_AGENT]': ['scheduler'],
   '[STRAVA_AGENT]': ['strava'],
+  '[ANALYSER_AGENT]': ['analyser'],
   '[NUMERICAL_ANALYSER_AGENT]': ['num_analyser'],
   '[VISION_ANALYSER_AGENT]': ['vision_analyser'],
   '[FileReader_tool]': ['tool_file_reader'],
@@ -310,7 +309,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
     
     // Check for agent START/FINISH events
     if (logMessage.includes('START:') || logMessage.includes('FINISH:')) {
-      const agentMatch = logMessage.match(/\[(PLANNER_AGENT|SCHEDULER_AGENT|STRAVA_AGENT|ANALYSER_AGENT)\]/);
+      const agentMatch = logMessage.match(/\[(PLANNER_AGENT|SCHEDULER_AGENT|STRAVA_AGENT|ANALYSER_AGENT|NUMERICAL_ANALYSER_AGENT|VISUAL_ANALYSER_AGENT)\]/);
       if (agentMatch) {
         const agentName = agentMatch[1].toLowerCase().replace('_agent', '');
         console.log('Agent name extracted:', agentName);
@@ -452,18 +451,18 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
           // Look for specific log patterns in the agent response
           const logPatterns = [
             '[FRONTEND TO AGENT]',
+            '[PLANNER_AGENT]',
+            '[SCHEDULER_AGENT]',
+            '[STRAVA_AGENT]',
+            '[ANALYSER_AGENT]',
+            '[VISUAL_ANALYSER_AGENT]',
+            '[NUMERICAL_ANALYSER_AGENT]',
             '[FileReader_tool]',
             '[ImageReader_tool]',
             '[CalendarAPI_tool_create_event]',
             '[CalendarAPI_tool_list_events]',
             '[WeatherAPI_tool]',
             '[StravaAPI_tool]',
-            '[PLANNER_AGENT]',
-            '[SCHEDULER_AGENT]',
-            '[STRAVA_AGENT]',
-            '[ANALYSER_AGENT]',
-            '[NUMERICAL_ANALYSER_AGENT]',
-            '[VISUAL_ANALYSER_AGENT]',
             '[ChartCreator_tool]',
             'START:',
             'FINISH:'
