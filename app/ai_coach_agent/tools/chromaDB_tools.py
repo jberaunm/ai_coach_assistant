@@ -549,3 +549,133 @@ def get_activity_by_id(activity_id: int):
             "message": f"Error retrieving activity data: {str(e)}",
             "activity_data": None
         }
+
+def get_weekly_sessions(start_date: str) -> Dict:
+    """Get sessions for a week starting from the given date (Monday).
+        
+    Args:
+        start_date: Start date in YYYY-MM-DD format (should be a Monday)
+            
+    Returns:
+        Dict containing:
+            - status: "success" or "error"
+            - data: List of daily sessions for the week
+            - summary: Weekly summary statistics
+            - message: Description of the result
+    """
+    try:
+        from datetime import datetime, timedelta
+            
+        # Validate start_date format
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            return {
+                "status": "error",
+                "data": None,
+                "summary": None,
+                "message": "Invalid date format. Use YYYY-MM-DD"
+            }
+            
+        days_since_monday = start_dt.weekday()
+        # Calculate the Monday of the current week
+        monday_dt = start_dt - timedelta(days=days_since_monday)
+        # Calculate the Sunday of the current week (6 days after Monday)
+        sunday_dt = monday_dt + timedelta(days=6)
+        # Format the datetime objects back into 'YYYY-MM-%d' strings
+        start_date_of_week = monday_dt.strftime("%Y-%m-%d")
+        end_date_of_week = sunday_dt.strftime("%Y-%m-%d")   
+        # Get all sessions for the week by querying each day individually
+        daily_sessions = {}
+      
+        for i in range(7):
+            current_date = (monday_dt + timedelta(days=i)).strftime("%Y-%m-%d")               
+            # Get sessions for this specific date
+            results = chroma_service.collection.get(
+                    where={"date": current_date}
+            )           
+            # Check if we have any results for this date
+            if (results and 'ids' in results and results['ids'] and 
+                len(results['ids']) > 0):
+                    
+                # Deserialize JSON strings in metadata
+                if 'metadatas' in results and results['metadatas'] and len(results['metadatas']) > 0:
+                    for j, metadata in enumerate(results['metadatas']):
+                        results['metadatas'][j] = chroma_service._deserialize_metadata(metadata)                  
+                # Process the results for this date
+                for j in range(len(results['ids'])):
+                    session_date = results['metadatas'][j].get('date', '')
+                    daily_sessions[session_date] = {
+                        'id': results['ids'][j],
+                        'session': results['documents'][j],
+                        'metadata': results['metadatas'][j]
+                    }
+            
+        # Create a complete week structure (Monday to Sunday)
+        week_data = []
+        total_distance = 0
+        total_sessions = 0
+        completed_sessions = 0
+            
+        for i in range(7):
+            current_date = (start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+            day_name = (start_dt + timedelta(days=i)).strftime("%A")
+                
+            if current_date in daily_sessions:
+                session_data = daily_sessions[current_date]
+                metadata = session_data['metadata']               
+                # Extract session information
+                session_type = metadata.get('type', 'No Session')
+                distance = metadata.get('distance', 0)
+                session_completed = metadata.get('session_completed', False)          
+                # Update totals
+                if session_type != 'Rest Day' and distance > 0:
+                    total_sessions += 1
+                    total_distance += distance            
+                if session_completed:
+                    completed_sessions += 1     
+                week_data.append({
+                    'date': current_date,
+                    'day_name': day_name,
+                    'session_type': session_type,
+                    'distance': distance,
+                    'session_completed': session_completed,
+                    'has_activity': session_type != 'Rest Day' and distance > 0,
+                    'is_today': current_date == datetime.now().strftime("%Y-%m-%d")
+                })
+            else:
+                # No session data for this day
+                week_data.append({
+                    'date': current_date,
+                    'day_name': day_name,
+                    'session_type': 'No Session',
+                    'distance': 0,
+                    'session_completed': False,
+                    'has_activity': False,
+                    'is_today': current_date == datetime.now().strftime("%Y-%m-%d")
+                })  
+        # Create weekly summary
+        summary = {
+            'total_distance': total_distance,
+            'total_sessions': total_sessions,
+            'completed_sessions': completed_sessions,
+            'completion_rate': (completed_sessions / total_sessions * 100) if total_sessions > 0 else 0,
+            'week_start': start_date_of_week,
+            'week_end': end_date_of_week
+        }
+            
+        return {
+            "status": "success",
+            "data": week_data,
+            "summary": summary,
+            "message": f"Weekly data retrieved for {start_date_of_week} to {end_date_of_week}"
+        }
+            
+    except Exception as e:
+        print(f"Error in get_weekly_sessions: {str(e)}")
+        return {
+            "status": "error",
+            "data": None,
+            "summary": None,
+            "message": f"Error retrieving weekly sessions: {str(e)}"
+        }

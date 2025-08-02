@@ -221,10 +221,7 @@ def get_activity_with_laps(start_date: str) -> dict:
                 "start_date": activity.start_date_local.strftime("%Y-%m-%d %H:%M") if activity.start_date_local else "N/A",
                 "actual_start": activity.start_date_local.strftime("%H:%M") if activity.start_date_local else "N/A",
                 "pace": format_activity_pace(activity.average_speed) if activity.average_speed else "N/A",
-                "total_distance_meters": float(activity.distance) if activity.distance else 0,
-                "total_data_points": len(activity.laps) if activity.laps else 0,
-                "resolution": "lap",
-                "series_type": "lap"
+                "total_laps": len(activity.laps) if activity.laps else 0
             },
             "data_points": []
         }
@@ -251,19 +248,12 @@ def get_activity_with_laps(start_date: str) -> dict:
             cadence_spm = cadence_rpm * 2 if cadence_rpm and cadence_rpm > 0 else None
             
             data_point = {
-                "index": i,
                 "lap_index": lap.lap_index if lap.lap_index else i + 1,
                 "distance_meters": float(lap.distance) if lap.distance else None,
-                "velocity_ms": velocity_ms,
+                "pace_ms": velocity_ms,
                 "heartrate_bpm": lap.average_heartrate if lap.average_heartrate else None,
-                "max_heartrate_bpm": lap.max_heartrate if lap.max_heartrate else None,
                 "cadence": cadence_spm,
                 "elapsed_time": lap.elapsed_time if lap.elapsed_time else None,
-                "moving_time": lap.moving_time if lap.moving_time else None,
-                "altitude_meters": float(lap.total_elevation_gain),
-                "max_speed": lap.max_speed if lap.max_speed else None,
-                "start_index": lap.start_index if lap.start_index else None,
-                "end_index": lap.end_index if lap.end_index else None,
             }
             activity_data["data_points"].append(data_point)
 
