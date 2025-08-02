@@ -110,18 +110,18 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
     try {
       const message = {
         mime_type: "text/plain",
-        data: `What's my schedule for ${formattedDate}?`,
+        data: `Day overview for ${formattedDate}?`,
         role: "user"
       };
       
       websocket.send(JSON.stringify(message));
-      console.log(`Scheduling request sent for ${formattedDate}`);
+      console.log(`Day overview request sent for ${formattedDate}`);
       
       // Store the timeout ID to clear it if we get a response
       (scheduleDay as any).fallbackTimeout = fallbackTimeout;
       
     } catch (err) {
-      console.error('Error sending scheduling request:', err);
+      console.error('Error sending Day overview request:', err);
       setScheduling(false);
       pendingSchedulingDate.current = '';
       clearTimeout(fallbackTimeout);
@@ -138,7 +138,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
         
         // Check if this is a turn_complete message (agent finished processing)
         if (data.turn_complete === true && pendingSchedulingDate.current) {
-          console.log(`Scheduling completed for ${pendingSchedulingDate.current}, fetching updated data`);
+          console.log(`Day overview completed for ${pendingSchedulingDate.current}, fetching updated data`);
           
           // Clear the fallback timeout since we got a response
           if ((scheduleDay as any).fallbackTimeout) {

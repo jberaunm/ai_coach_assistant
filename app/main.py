@@ -288,22 +288,9 @@ FRONT_END_DIR = Path(__file__).parent.parent / "frontend"
 UPLOAD_DIR = APP_DIR / "uploads"
 PUBLIC_DIR = FRONT_END_DIR / "public"
 
-# websocket_connections is now defined globally for log forwarding
-
-# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")  # Removed
-
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# --- Removed old root and favicon routes ---
-# @app.get("/", response_class=HTMLResponse)
-# async def get():
-#     """Serves the index.html"""
-#     return FileResponse(STATIC_DIR / "index.html")
-
-# @app.get("/favicon.ico")
-# async def favicon():
-#     return FileResponse(STATIC_DIR / "favicon.ico")
 
 # --- Add a simple health check root route ---
 @app.get("/")
@@ -466,6 +453,24 @@ async def get_session_by_date(date: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
+
+@app.get("/api/weekly/{start_date}")
+async def get_weekly_sessions(start_date: str):
+    """Get weekly sessions starting from the given date (should be a Monday) in YYYY-MM-DD format."""
+    try:
+        result = chroma_service.get_weekly_sessions(start_date)
+        if result["status"] == "error":
+            # Only return 400 for invalid date format
+            if "Invalid date format" in result["message"]:
+                raise HTTPException(status_code=400, detail=result["message"])
+            else:
+                # For other errors, return 500
+                raise HTTPException(status_code=500, detail=result["message"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving weekly sessions: {str(e)}")
 
 @app.get("/api/activity/{activity_id}")
 async def get_activity_by_id_endpoint(activity_id: int):

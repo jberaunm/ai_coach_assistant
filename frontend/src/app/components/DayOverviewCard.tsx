@@ -13,6 +13,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
   const sessionType = sessionData?.metadata?.type || "No Session";
   const distance = sessionData?.metadata?.distance?.toString() || "0";
   const notes = sessionData?.metadata?.notes || "No additional notes";
+  const sessionCompleted = sessionData?.metadata?.session_completed || false;
 
   const goToNextDay = () => {
     const next = new Date(date);
@@ -28,18 +29,35 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
 
   return (
     <div style={{ 
-      backgroundColor: "#fff",
+      backgroundColor: sessionCompleted ? "#e8f5e8" : "#fff",
       borderRadius: "12px",
       padding: "20px 20px",
       textAlign: "center",
       height: "fit-content",
-      width: "100%"
+      width: "100%",
+      border: sessionCompleted ? "2px solid #4caf50" : "1px solid #e0e0e0",
+      transition: "all 0.3s ease"
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={goToPrevDay}>{'<'}</button>
         <div style={{ textAlign: "center" }}>
           <h1>{date.toDateString()}</h1>
-          {scheduling && (
+          {sessionCompleted && (
+            <div style={{ 
+              fontSize: "12px", 
+              color: "#4caf50", 
+              marginTop: "4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px",
+              fontWeight: "600"
+            }}>
+              <span>✓</span>
+              Completed
+            </div>
+          )}
+          {scheduling && !sessionCompleted && (
             <div style={{ 
               fontSize: "12px", 
               color: "#666", 
@@ -97,7 +115,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
         }}>
           {loading ? (
             <div style={{ 
-              fontSize: "46px", 
+              fontSize: "42px", 
               fontWeight: "600", 
               color: "var(--primary-color)",
               lineHeight: "1.2"
@@ -107,7 +125,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
           ) : (
             <>
               <div style={{ 
-                fontSize: "46px", 
+                fontSize: "38px", 
                 fontWeight: "600", 
                 color: "var(--primary-color)",
                 lineHeight: "1.2"
@@ -136,7 +154,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
           flex: 1
         }}>
           <div style={{ 
-            fontSize: "90px", 
+            fontSize: "70px", 
             fontWeight: "600", 
             color: "var(--primary-color)",
             lineHeight: "1.2"
@@ -146,7 +164,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
             ) : (
               <>
                 <span style={{ fontWeight: "600" }}>{distance}</span>
-                <span style={{ fontWeight: "300", fontSize: "60px" }}>k</span>
+                <span style={{ fontWeight: "300", fontSize: "50px" }}>k</span>
               </>
             )}
           </div>
@@ -162,7 +180,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
           <div style={{ 
             width: "100px",
             textAlign: "center",
-            fontSize: "22px",
+            fontSize: "18px",
             fontWeight: "500",
             color: "var(--primary-color)",
             lineHeight: "1.3"

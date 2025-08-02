@@ -36,6 +36,9 @@ export default function EventsCalendar({ date }: EventsCalendarProps) {
     }
   }, [sessionData]);
 
+  // Check if the session is completed
+  const sessionCompleted = sessionData?.metadata?.session_completed || false;
+
   return (
     <div className="stat-card events-calendar-card">
       <div style={{ display: "flex", alignItems: "flex-start", gap: "20px" }}>
@@ -60,13 +63,20 @@ export default function EventsCalendar({ date }: EventsCalendarProps) {
               </div>
             ) : events.length > 0 ? (
               events.map((event) => (
-                <div key={event.id} className={`event-slot ${event.isAI ? 'ai-event' : ''}`}>
+                <div 
+                  key={event.id} 
+                  className={`event-slot ${event.isAI ? (sessionCompleted ? 'ai-event' : 'ai-event-pending') : ''}`}
+                >
                   <div className="event-time">
                     {event.startTime} - {event.endTime}
                   </div>
                   <div className="event-title">
                     {event.title}
-                    {event.isAI && <span className="ai-badge">🤖 AI</span>}
+                    {event.isAI && (
+                      <span className={`ai-badge ${sessionCompleted ? 'ai-badge-completed' : 'ai-badge-pending'}`}>
+                        🤖 AI
+                      </span>
+                    )}
                   </div>
                 </div>
               ))

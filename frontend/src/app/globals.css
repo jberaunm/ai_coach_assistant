@@ -482,6 +482,16 @@ button:active:not(:disabled) {
   background-color: #e8f5e8;
 }
 
+/* AI Event pending styling (not completed) */
+.event-slot.ai-event-pending {
+  border-left-color: var(--secondary-color);
+  background-color: #fef7f4;
+}
+
+.event-slot.ai-event-pending:hover {
+  background-color: #fdeee8;
+}
+
 .ai-badge {
   display: inline-block;
   background-color: #34A853;
@@ -492,6 +502,14 @@ button:active:not(:disabled) {
   border-radius: 10px;
   margin-left: 8px;
   vertical-align: middle;
+}
+
+.ai-badge-completed {
+  background-color: #34A853;
+}
+
+.ai-badge-pending {
+  background-color: var(--secondary-color);
 }
 
 /* Weather forecast styling */
@@ -574,6 +592,7 @@ button:active:not(:disabled) {
   padding: 16px;
   background-color: #f8f9fa;
   border-radius: 8px;
+  gap: 8px;
 }
 
 .total-item {
@@ -629,6 +648,16 @@ button:active:not(:disabled) {
 .day-item.today {
   border-color: var(--secondary-color);
   background-color: #fff3f0;
+}
+
+.day-item.today.completed {
+  border-color: #4CAF50;
+  background-color: #e8f5e8;
+}
+
+.day-item.today.incomplete {
+  border-color: var(--secondary-color);
+  background-color: #fef7f4;
 }
 
 .day-item.has-activity {
