@@ -17,7 +17,7 @@ export default function DayOverviewCard({ date, onDateChange }: DayOverviewCardP
 
   const goToNextDay = () => {
     const next = new Date(date);
-    next.setDate(date.getDate() + 1);
+    next.setDate(date.getDate() + 1);1
     onDateChange(next);
   };
 

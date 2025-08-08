@@ -324,13 +324,14 @@ def update_sessions_time_scheduled_by_date(date: str, time_scheduled_data: list)
             "message": f"Error updating sessions time_scheduled by date: {str(e)}"
         }
 
-def mark_session_completed_by_date(date: str, id: int, actual_start: Optional[str] = None):
-    """Mark the session as completed and optionally update the actual start time in time_scheduled.
+def mark_session_completed_by_date(date: str, id: int, actual_distance: int, actual_start: str):
+    """Mark the session as completed and optionally update the actual start time in time_scheduled and actual distance.
     
     Args:
         date: The date in YYYY-MM-DD format
         id: id of the session
-        actual_start: Optional actual start time in HH:MM format (e.g., "14:30")
+        actual_start: Actual start time in HH:MM format (e.g., "14:30")
+        actual_distance: Actual distance in kilometers
         
     Returns:
         Dict with status and message
@@ -354,6 +355,9 @@ def mark_session_completed_by_date(date: str, id: int, actual_start: Optional[st
 
         # Link the session to the activity
         current_metadata['activity_id'] = id
+
+        # Update the actual distance
+        current_metadata['actual_distance'] = actual_distance
         
         # Update actual start time in time_scheduled if provided
         if actual_start and 'time_scheduled' in current_metadata:
@@ -395,7 +399,7 @@ def write_activity_data(activity_data: Dict[str, Any]):
                 "metadata": {
                     "type": str,
                     "name": str,
-                    "distance": str,
+                    "actual_distance": str,
                     "duration": str,
                     "start_date": str,
                     "actual_start": str,
@@ -613,34 +617,38 @@ def get_weekly_sessions(start_date: str) -> Dict:
             
         # Create a complete week structure (Monday to Sunday)
         week_data = []
-        total_distance = 0
+        total_distance_planned = 0
+        total_distance_completed = 0
         total_sessions = 0
         completed_sessions = 0
             
         for i in range(7):
-            current_date = (start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
-            day_name = (start_dt + timedelta(days=i)).strftime("%A")
+            current_date = (monday_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+            day_name = (monday_dt + timedelta(days=i)).strftime("%A")
                 
             if current_date in daily_sessions:
                 session_data = daily_sessions[current_date]
                 metadata = session_data['metadata']               
                 # Extract session information
                 session_type = metadata.get('type', 'No Session')
-                distance = metadata.get('distance', 0)
+                actual_distance = metadata.get('actual_distance', 0)
+                planned_distance = metadata.get('distance', 0)
                 session_completed = metadata.get('session_completed', False)          
                 # Update totals
-                if session_type != 'Rest Day' and distance > 0:
+                if session_type != 'Rest Day' and planned_distance > 0:
                     total_sessions += 1
-                    total_distance += distance            
+                    total_distance_planned += planned_distance
+                    total_distance_completed += actual_distance            
                 if session_completed:
                     completed_sessions += 1     
                 week_data.append({
                     'date': current_date,
                     'day_name': day_name,
                     'session_type': session_type,
-                    'distance': distance,
+                    'planned_distance': planned_distance,
+                    'actual_distance': actual_distance,
                     'session_completed': session_completed,
-                    'has_activity': session_type != 'Rest Day' and distance > 0,
+                    'has_activity': session_type != 'Rest Day' and actual_distance > 0,
                     'is_today': current_date == datetime.now().strftime("%Y-%m-%d")
                 })
             else:
@@ -649,14 +657,16 @@ def get_weekly_sessions(start_date: str) -> Dict:
                     'date': current_date,
                     'day_name': day_name,
                     'session_type': 'No Session',
-                    'distance': 0,
+                    'planned_distance': 0,
+                    'actual_distance': 0,
                     'session_completed': False,
                     'has_activity': False,
                     'is_today': current_date == datetime.now().strftime("%Y-%m-%d")
                 })  
         # Create weekly summary
         summary = {
-            'total_distance': total_distance,
+            'total_distance_planned': total_distance_planned,
+            'total_distance_completed': total_distance_completed,
             'total_sessions': total_sessions,
             'completed_sessions': completed_sessions,
             'completion_rate': (completed_sessions / total_sessions * 100) if total_sessions > 0 else 0,
