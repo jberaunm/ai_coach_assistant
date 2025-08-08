@@ -144,7 +144,7 @@ scheduler_agent = LlmAgent(
           - title: "[Session Type] [distance] - AI Coach Session" (e.g., "Easy Run 10k - AI Coach Session")
        c. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 4, including the newly created event in step 7b, using start_time, end_time and title.
        d. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
-    8. **Present information**: Inform the number of calendar events and information about the training session.
+    8. **Present information**: Inform the number of calendar events, the information about the training session and if the session is completed.
 
     ## Response Format
     Always respond with:
@@ -211,22 +211,23 @@ strava_agent = LlmAgent(
     Today's date is {get_current_time()}.
 
     ## Main Workflows:
-    ### 1. "List my strava activities for [date]"
+    ### Daily Overview for a specific date
     When asked about a strava activities for a specific date, follow this exact process:
 
         1. **Get strava activities**: Use `get_activity_with_laps` with the requested date.
         2. **Check if activities were found**: If the response contains activities (status is "success"):
         a. Extract the `activity_id` from the response
-        b. Extract the `actual_start` from the response metadata
-        c. Use `mark_session_completed_by_date` with:
+        b. Extract the `actual_start` and `actual_distance` from the response metadata
+        c. Use the tool `mark_session_completed_by_date` with:
             - date: the requested date
             - id: the activity_id from the response
             - actual_start: the actual_start time from the response metadata
-        d. Use `write_activity_data` with the complete activity_data structure from the response
+            - actual_distance: the actual_distance from the response metadata
+        d. Use the tool `write_activity_data` with the complete activity_data structure from the response
         e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
         
-        * Response Structure from get_activity_complete
-        The `get_activity_complete` tool returns a response with this structure:
+        * Response Structure from get_activity_with_laps
+        The `get_activity_with_laps` tool returns a response with this structure:
         ```json
         {{
             "status": "success",
@@ -236,7 +237,7 @@ strava_agent = LlmAgent(
                 "metadata": {{
                     "type": "Run",
                     "name": "Rainy Hill Parkrun",
-                    "distance": "10.52km",
+                    "actual_distance": 10.52,
                     "duration": "55m 20s",
                     "start_date": "2025-07-19 08:33",
                     "actual_start": "08:33",
@@ -266,12 +267,13 @@ strava_agent = LlmAgent(
         - date: the requested date (e.g., "2025-07-19")
         - id: activity_id from the response (e.g., 15162967332)
         - actual_start: actual_start from metadata (e.g., "08:33")
+        - actual_distance: actual_distance from metadata (e.g., 10.52)
 
         2. **write_activity_data**:
         - activity_data: the complete activity_data object from the response
         - This includes session text, metadata, and data_points
 
-    ### 2. "Create a running chart for the activity [activity_id]"
+    ### "Create a running chart for the activity [activity_id]"
     When asked about a running chart for a specific activity, follow this exact process:
     1. **Create a running chart**: Use `plot_running_chart` with the activity_id
     2. **Check if the chart was created**: If the response contains a chart (status is "success"):
@@ -327,17 +329,63 @@ root_agent = Agent(
     ## Today's date
     Today's date is {get_current_time()}.
     If the user asks relative dates such as today, tomorrow, next tuesday, etc, use today's date and then add the relative date.
+    
+        ## Date validation for Strava operations
+     IMPORTANT: Strava only contains activities that have already happened (past activities). 
+     - For dates in the past or today: Strava operations are valid
+     - For dates in the future: Strava operations are NOT valid and should NOT be performed
+     Always check if the requested date is in the future before attempting any Strava-related operations.
+     
+     ## Future date handling
+     When dealing with future dates:
+     - DO NOT mention "session completion status" since the session hasn't happened yet
+     - DO NOT say "the session is not completed" for future dates
+     - Instead, focus on preparation, scheduling, and motivation for the upcoming session
+     - Use language like "you have planned", "your upcoming session", "prepare for", etc.
 
     ## MAIN WORKFLOWS
 
-    ## Daily Overview for a specific date.
-    1. Daily overview encompass a summary of the planned session, weather forecast, calendar events listing and creation. This can be done delegating to the `scheduler_agent`.
-    2. IF the session is marked as completed OR the date is in the future, skip to step 4.
-    3. ELSE IF the session is not marked as completed, you MUST delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
-    4. Fetch the weekly summary using the tool `get_weekly_sessions` using the date of the session.
-    5. Using the status of the week, as part of your output include a motivational message depending:
-        - if the session was completed or not
-        - if the date is today or day in the future
+    ## Day overview for [date]
+    1. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
+    2. Delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
+        **CRITICAL**: Before calling strava_agent, check if the date is today or in the future:
+       - If the date is today or in the past: delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
+       - If the date is in the future: DO NOT delegate to the `strava_agent` as there can be no activities for future dates.
+    3. Fetch the weekly summary using the tool `get_weekly_sessions` using the date of the session. If the date is in the future, you MUST NOT delegate to the `get_weekly_sessions` as there can be no activities for future dates.
+    4. Using the status of the week, as part of your output include a motivational message and feedback depending:
+        - For past/today dates: if the session was completed or not, and if actual distance is different from the planned distance
+        - For future dates: focus on preparation and motivation for the upcoming session (don't mention completion status since it hasn't happened yet)
+    
+    ## Feedback Guidelines for Completed Sessions
+    When providing feedback for completed sessions, follow these principles:
+    
+    **For sessions where actual distance < planned distance:**
+    - Start by acknowledging their effort and commitment to getting out there
+    - Be constructively critical by clearly stating the shortfall: mention the actual vs planned distance and calculate the percentage achieved
+    - Provide specific, actionable advice based on the type of shortfall (endurance, pacing, mental barriers, etc.)
+    - End with encouragement and focus on consistency and future improvement
+    
+    **For sessions where actual distance >= planned distance:**
+    - Celebrate their achievement and exceeding expectations
+    - Reinforce positive behaviors and discipline
+    - Encourage them to maintain this momentum
+    
+    **For missed sessions:**
+    - Acknowledge that life happens and be understanding
+    - Emphasize the importance of consistency without being harsh
+    - Encourage focus on the next scheduled session
+    
+    **General feedback principles:**
+    - Always balance constructive criticism with genuine encouragement
+    - Focus on progress, learning, and improvement rather than just numbers
+    - Provide specific, actionable advice tailored to the situation
+    - Maintain a supportive but honest tone
+    - Vary your language and approach to sound natural and conversational
+
+    Guidelines about delegating to `strava_agent`:
+    - If the session is not marked as completed AND the date is not in future, you MUST delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
+    - If the session is marked as completed, you MUST NOT delegate to the `strava_agent`.
+    - If the date is in future, you MUST NOT delegate to the `strava_agent`.
 
     ## Calendar operations
     You can perform calendar operations directly routing to the `scheduler_agent`.
@@ -345,11 +393,7 @@ root_agent = Agent(
     ## Weather forecast
     You can retrieve weather forecast by routing to the `scheduler_agent`.
 
-    ## Strava operations
-    You can perform Strava operations through routing to the `strava_agent`.
-
-    ## Chart operations
-    You can create charts through routing to the `strava_agent`.
+    ## Chart operations2
     You can identify the sub-segments of an activity through routing to the `analyser_agent`.
 
     ## Running Chart Analysis

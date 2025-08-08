@@ -27,8 +27,38 @@ interface SessionData {
   };
 }
 
+interface DayStats {
+  date: string;
+  day_name: string;
+  sessionType: string;
+  planned_distance: number;
+  actual_distance: number;
+  session_completed: boolean;
+  has_activity: boolean;
+  is_today: boolean;
+  metadata: any;
+}
+
+interface WeeklySummary {
+  total_distance_planned: number;
+  total_distance_completed: number;
+  total_sessions: number;
+  completed_sessions: number;
+  completion_rate: number;
+  week_start: string;
+  week_end: string;
+}
+
+interface WeeklyData {
+  status: string;
+  data: DayStats[];
+  summary: WeeklySummary;
+  message: string;
+}
+
 interface SessionDataContextType {
   sessionData: SessionData | null;
+  weeklyData: WeeklyData | null;
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -46,11 +76,18 @@ interface SessionDataProviderProps {
 
 export function SessionDataProvider({ children, date, websocket }: SessionDataProviderProps) {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const lastScheduledDate = useRef<string>('');
   const pendingSchedulingDate = useRef<string>('');
+
+  const getMondayOfWeek = (date: Date) => {
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+    return new Date(date.setDate(diff));
+  };
 
   const fetchSessionData = async (specificDate?: string) => {
     setLoading(true);
@@ -88,6 +125,26 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
     }
   };
 
+  const fetchWeeklyData = async () => {
+    try {
+      const monday = getMondayOfWeek(new Date(date));
+      const startDate = monday.toISOString().split('T')[0];
+      
+      const response = await fetch(`http://localhost:8000/api/weekly/${startDate}`);
+      
+      if (response.ok) {
+        const data: WeeklyData = await response.json();
+        setWeeklyData(data);
+      } else {
+        console.error('Failed to fetch weekly data:', response.status);
+        setWeeklyData(null);
+      }
+    } catch (err) {
+      console.error('Error fetching weekly data:', err);
+      setWeeklyData(null);
+    }
+  };
+
   const scheduleDay = async (formattedDate: string) => {
     if (!websocket || websocket.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket not available for scheduling');
@@ -102,6 +159,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
       if (pendingSchedulingDate.current === formattedDate) {
         console.warn(`Scheduling timeout for ${formattedDate}, fetching data anyway`);
         fetchSessionData(formattedDate);
+        fetchWeeklyData(); // Also refresh weekly data
         setScheduling(false);
         pendingSchedulingDate.current = '';
       }
@@ -149,6 +207,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
           // Wait a moment for the database to be updated, then fetch fresh data
           setTimeout(() => {
             fetchSessionData(pendingSchedulingDate.current);
+            fetchWeeklyData(); // Also refresh weekly data when agent finishes
             setScheduling(false);
             pendingSchedulingDate.current = '';
           }, 1000); // Short delay to ensure DB is updated
@@ -168,22 +227,19 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
   useEffect(() => {
     const formattedDate = date.toISOString().split('T')[0];
     
-    // Only schedule if we haven't scheduled this date before
+    // Only fetch existing data, don't automatically schedule
     if (formattedDate !== lastScheduledDate.current) {
       lastScheduledDate.current = formattedDate;
       
-      // First try to fetch existing data
-      fetchSessionData().then(() => {
-        // If no data exists or data is incomplete, schedule the day
-        if (!sessionData || !sessionData.metadata?.weather?.hours?.length || !sessionData.metadata?.calendar?.events?.length) {
-          scheduleDay(formattedDate);
-        }
-      });
+      // Just fetch existing data without automatic scheduling
+      fetchSessionData();
+      fetchWeeklyData(); // Also fetch weekly data when date changes
     }
   }, [date, websocket]);
 
   const refetch = () => {
     fetchSessionData();
+    fetchWeeklyData(); // Also refresh weekly data
   };
 
   const forceSchedule = () => {
@@ -194,6 +250,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
   return (
     <SessionDataContext.Provider value={{ 
       sessionData, 
+      weeklyData,
       loading: loading || scheduling, 
       error, 
       refetch, 

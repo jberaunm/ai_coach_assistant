@@ -124,21 +124,21 @@ export default function Home() {
             <WeatherForecast date={sharedDate} />
             <EventsCalendar date={sharedDate} />
           </div>
-        </SessionDataProvider>
-        <div className="side-containers">
-          <WeeklyStats date={sharedDate} />
-          <div className="stat-card">
-            <h1>Training plan</h1>
-            <FileUpload websocket={websocket} />
-            <div id="training-plan-status" style={{display: "none", alignItems: "center", gap: "8px"}}>
-              <svg id="uploaded-icon" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="12" fill="#34A853" />
-                <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2" fill="none" />
-              </svg>
-              <span>Training plan uploaded and processed</span>
+          <div className="side-containers">
+            <WeeklyStats date={sharedDate} />
+            <div className="stat-card">
+              <h1>Training plan</h1>
+              <FileUpload websocket={websocket} />
+              <div id="training-plan-status" style={{display: "none", alignItems: "center", gap: "8px"}}>
+                <svg id="uploaded-icon" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="12" fill="#34A853" />
+                  <path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2" fill="none" />
+                </svg>
+                <span>Training plan uploaded and processed</span>
+              </div>
             </div>
           </div>
-        </div>
+        </SessionDataProvider>
         <div className="third-column">
           <div className="stat-card">
             <h1 style={{ marginBottom: 12 }}>Chat Interaction</h1>

@@ -77,7 +77,7 @@ def get_activity_with_streams(start_date: str) -> dict:
             "metadata": {
                 "type": target_activity.sport_type.root if target_activity.sport_type else "Unknown",
                 "name": target_activity.name if target_activity.name else "Untitled Activity",
-                "distance": format_activity_distance(float(target_activity.distance)) if target_activity.distance else "N/A",
+                "actual_distance": format_activity_distance(float(target_activity.distance)) if target_activity.distance else "N/A",
                 "duration": format_activity_duration(target_activity.moving_time) if target_activity.moving_time else "N/A",
                 "start_date": target_activity.start_date_local.strftime("%Y-%m-%d %H:%M") if target_activity.start_date_local else "N/A",
                 "actual_start": target_activity.start_date_local.strftime("%H:%M") if target_activity.start_date_local else "N/A",
@@ -216,7 +216,7 @@ def get_activity_with_laps(start_date: str) -> dict:
             "metadata": {
                 "type": activity.sport_type.root if activity.sport_type else "Unknown",
                 "name": activity.name if activity.name else "Untitled Activity",
-                "distance": format_activity_distance(float(activity.distance)) if activity.distance else "N/A",
+                "actual_distance": format_activity_distance(float(activity.distance)) if activity.distance else "N/A",
                 "duration": format_activity_duration(activity.moving_time) if activity.moving_time else "N/A",
                 "start_date": activity.start_date_local.strftime("%Y-%m-%d %H:%M") if activity.start_date_local else "N/A",
                 "actual_start": activity.start_date_local.strftime("%H:%M") if activity.start_date_local else "N/A",
