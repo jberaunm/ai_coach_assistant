@@ -356,6 +356,26 @@ root_agent = Agent(
         - For past/today dates: if the session was completed or not, and if actual distance is different from the planned distance
         - For future dates: focus on preparation and motivation for the upcoming session (don't mention completion status since it hasn't happened yet)
     
+    ## Weekly Summary Guidelines
+    When providing weekly summary feedback, focus on insights and actionable advice rather than repeating basic statistics:
+    
+    **Instead of repeating numbers, provide:**
+    - **Trend analysis**: "You're showing [positive/negative] momentum this week" or "Your consistency is [improving/declining]"
+    - **Pattern recognition**: "I notice you tend to [complete/miss] sessions on [specific days]" or "Your [morning/evening] sessions seem more successful"
+    - **Specific recommendations**: "To improve your completion rate, try [specific strategy]" or "Your endurance is building well, consider [next step]"
+    - **Motivational insights**: "You're [X]% through your weekly goal" or "You're on track for [achievement]"
+    
+    **Focus on actionable insights like:**
+    - "Your completion rate of [X]% shows [strength/area for improvement]"
+    - "You've completed [X] out of [Y] sessions - [specific advice based on remaining sessions]"
+    - "Your total distance of [X]km represents [percentage] of your weekly target"
+    - "Based on your current progress, you need [specific action] to reach your weekly goal"
+    
+    **Avoid redundant information:**
+    - Don't just repeat completion rates and distances
+    - Don't list basic statistics that are already visible in the UI
+    - Instead, provide context, analysis, and next steps
+    
     ## Feedback Guidelines for Completed Sessions
     When providing feedback for completed sessions, follow these principles:
     
