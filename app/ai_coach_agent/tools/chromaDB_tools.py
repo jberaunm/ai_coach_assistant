@@ -498,6 +498,7 @@ def get_activity_by_id(activity_id: int):
         dict: The activity data or a message if none found.
     """
     try:
+        print(f"Getting activity data by ID: {activity_id}")
         activity_id_str = str(activity_id)
         results = chroma_service.collection.get(ids=[activity_id_str])
         

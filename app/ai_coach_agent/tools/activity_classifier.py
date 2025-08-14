@@ -16,7 +16,8 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         activity_data: A dictionary containing activity details, including a list 
-                       of laps with 'pace' values.
+                       of laps with 'pace' values. The function can handle both
+                       "laps" and "data_points" keys.
 
     Returns:
         A new dictionary with the same structure as the input, but with a new 
@@ -24,13 +25,25 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
         "Cool down".
     """
     print(f"[ActivityClassifier_tool] Segmenting activity by pace")
+    print(f"[ActivityClassifier_tool] Input data keys: {list(activity_data.keys())}")
     
     # Create a deep copy of the input data to avoid modifying the original object.
     segmented_data = copy.deepcopy(activity_data)
-    laps = segmented_data.get("laps", [])
+    
+    laps = segmented_data.get("data_points", [])
+    print(f"[ActivityClassifier_tool] Found {len(laps)} data points")
 
     if not laps:
+        print(f"[ActivityClassifier_tool] No data points found, returning original data")
         return segmented_data
+    
+    # Validate that data points have required fields
+    if laps and len(laps) > 0:
+        first_lap = laps[0]
+        print(f"[ActivityClassifier_tool] First lap keys: {list(first_lap.keys())}")
+        if "pace_ms" not in first_lap:
+            print(f"[ActivityClassifier_tool] Warning: pace_ms field not found in data points")
+            return segmented_data
 
     # --- Step 1: Identify a dynamic threshold based on the middle of the activity ---
     # We assume the main effort is typically in the middle of the run.
@@ -39,7 +52,7 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
     mid_end_index = num_laps - mid_start_index
     
     # Get the paces of the middle 50% of the laps.
-    middle_paces = [laps[i]["pace"] for i in range(mid_start_index, mid_end_index)]
+    middle_paces = [laps[i]["pace_ms"] for i in range(mid_start_index, mid_end_index)]
 
     if not middle_paces:
         # If there are too few laps, just classify all as Main.
@@ -59,7 +72,7 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
         # --- Step 2: Identify all laps that meet the "Main" pace criteria ---
         main_lap_indices = [
             i for i, lap in enumerate(laps)
-            if min_pace <= lap["pace"] <= max_pace
+            if min_pace <= lap["pace_ms"] <= max_pace
         ]
         
         # --- Step 3: Find the longest contiguous block of "Main" laps ---
@@ -98,44 +111,21 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
             main_paces_end_index = num_laps - 1
 
     # --- Step 4: Classify all laps based on the identified main segment ---
-    for i, lap in enumerate(segmented_data["laps"]):
+    print(f"[ActivityClassifier_tool] Main segment: laps {main_paces_start_index} to {main_paces_end_index}")
+    
+    for i, lap in enumerate(segmented_data["data_points"]):
         if i < main_paces_start_index:
             lap["segment"] = "Warm up"
         elif main_paces_start_index <= i <= main_paces_end_index:
             lap["segment"] = "Main"
         else: # i > main_paces_end_index
             lap["segment"] = "Cool down"
-
+    
+    # Print summary of segmentation
+    warm_up_count = sum(1 for lap in segmented_data["data_points"] if lap.get("segment") == "Warm up")
+    main_count = sum(1 for lap in segmented_data["data_points"] if lap.get("segment") == "Main")
+    cool_down_count = sum(1 for lap in segmented_data["data_points"] if lap.get("segment") == "Cool down")
+    
+    print(f"[ActivityClassifier_tool] Segmentation complete: {warm_up_count} warm up, {main_count} main, {cool_down_count} cool down")
     return segmented_data
 
-# --- Example Usage ---
-
-# Example 1: Activity with clear segments
-activity_data_1 = {
-    "activity_id": 15194488126,
-    "laps": [
-        {"lap_index": 1, "pace": 3.06},
-        {"lap_index": 2, "pace": 3.15},
-        {"lap_index": 3, "pace": 3.61},
-        {"lap_index": 4, "pace": 3.53},
-        {"lap_index": 5, "pace": 3.61},
-        {"lap_index": 6, "pace": 3.72},
-        {"lap_index": 7, "pace": 2.94},
-        {"lap_index": 8, "pace": 2.68}
-    ]
-}
-
-# Example 2: Activity with consistent pace (all Main)
-activity_data_2 = {
-    "activity_id": 15233791332,
-    "laps": [
-        {"lap_index": 1, "pace": 3.46},
-        {"lap_index": 2, "pace": 3.48},
-        {"lap_index": 3, "pace": 3.47},
-        {"lap_index": 4, "pace": 3.5},
-        {"lap_index": 5, "pace": 3.45},
-        {"lap_index": 6, "pace": 3.55},
-        {"lap_index": 7, "pace": 3.47},
-        {"lap_index": 8, "pace": 3.56}
-    ]
-}

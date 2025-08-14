@@ -188,7 +188,6 @@ def get_activity_with_laps(start_date: str) -> dict:
             }
 
         activity_id = target_activity.id
-        print(f"Found activity ID: {activity_id}")
 
         # Get activity by ID
         activity = client.get_activity(activity_id)
@@ -241,7 +240,7 @@ def get_activity_with_laps(start_date: str) -> dict:
         for i, lap in enumerate(activity.laps):
             # Get velocity in m/s and convert to pace format
             velocity_ms = lap.average_speed if lap.average_speed else None
-            pace = format_activity_pace(velocity_ms) if velocity_ms and velocity_ms > 0 else None
+            velocity_min_km = format_activity_pace(velocity_ms) if velocity_ms and velocity_ms > 0 else None
             
             # Get cadence in rpm and convert to spm (1 rpm = 2 spm)
             cadence_rpm = lap.average_cadence if lap.average_cadence else None
@@ -251,6 +250,7 @@ def get_activity_with_laps(start_date: str) -> dict:
                 "lap_index": lap.lap_index if lap.lap_index else i + 1,
                 "distance_meters": float(lap.distance) if lap.distance else None,
                 "pace_ms": velocity_ms,
+                "pace_min_km": velocity_min_km,
                 "heartrate_bpm": lap.average_heartrate if lap.average_heartrate else None,
                 "cadence": cadence_spm,
                 "elapsed_time": lap.elapsed_time if lap.elapsed_time else None,
@@ -258,7 +258,6 @@ def get_activity_with_laps(start_date: str) -> dict:
             activity_data["data_points"].append(data_point)
 
         print(f"Successfully processed {total_data_points} lap data points for activity {activity_id}")
-        print(f"Activity data: {activity_data}")
         return {
             "status": "success",
             "message": f"Retrieved complete lap data for activity {activity_id}",

@@ -14,6 +14,9 @@ from datetime import datetime
 def get_current_time():
     return datetime.now().strftime("%Y-%m-%d")
 
+def get_current_datetime():
+    return datetime.now().strftime("%H:%M")
+
 # from google.adk.tools import google_search  # Import the search tool
 from .tools import (
     create_event,
@@ -35,6 +38,7 @@ from .tools import (
     write_activity_data,
     plot_running_chart,
     plot_running_chart_laps,
+    get_activity_by_id,
     segment_activity_by_pace,
     agent_log
 )
@@ -59,8 +63,9 @@ planner_agent = LlmAgent(
     
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
 
-    ## Today's date
+    ## Today's date and time
     Today's date is {get_current_time()}.
+    Current time is {get_current_datetime()}.
 
     ## Date format
     When storing or querying dates in ChromaDB, always use the format YYYY-MM-DD.
@@ -123,18 +128,34 @@ scheduler_agent = LlmAgent(
     
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
 
-    ## Today's date
+    ## Today's date and time
     Today's date is {get_current_time()}.
+    Current time is {get_current_datetime()}.
 
     ## Main Workflow: "Day overview for [date]"
     When asked about a schedule for a specific date, follow this exact process:
 
-    1. **Get weather forecast**: Use `get_weather_forecast` with [date]
-    2. **Update weather in DB**: Use `update_sessions_weather_by_date`
-    3. **Get training session**: Use `get_session_by_date` with the requested date. Extract *session_completed* and if it's set to *true*, END the workflow and only inform that the session has already been completed.
-    4. **Get calendar events**: Use `list_events` with [date]
-    5. **Check for existing AI training session**: Look through the calendar events from step 4. If any event has a title ending with "AI Coach Session", then a training session has already been scheduled for this date.
-    6. **If AI session exists**: Inform the user that the session has already been scheduled and proceed to step 8.
+    1. **Get weather forecast**: Use tool `get_weather_forecast` with [date]
+    2. **Update weather in DB**: Use tool `update_sessions_weather_by_date`
+    3. **Get calendar events**: Use tool `list_events` with [date]
+    4. **Get training session**: Use tool `get_session_by_date` with the requested date. Extract *session_completed* and if it's set to *true*, END the workflow and only inform that the session has already been completed.
+    5. **Check for existing AI training session**: Look through the calendar events from step 3. If any event has a title ending with "AI Coach Session", then a training session has already been scheduled for this date.
+    6. **If AI session exists**:
+        a. **Check if session is in the past**: 
+           - Get current time using the current time context
+           - Compare the event's end time (HH:MM format) with current time (HH:MM format)
+           - If end_time < current_time, the session is in the past and needs rescheduling
+           - Example: if event ends at "08:00" and current time is "12:00", then "08:00" < "12:00" = TRUE (session is in past)
+        b. **If session is in the past**: 
+           - Extract the event_id from the calendar event
+           - Find a new suitable time based on calendar events and weather conditions
+           - Use `edit_event` tool to reschedule the session with the event_id, new start/end times
+           - Update the calendar in DB with the modified events
+           - Update time_scheduled in DB with the new scheduling information
+           - Inform the user that the session has been rescheduled
+        c. **If session is not in the past**:
+           - **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the events from step 3.
+           - Inform the user that the session has already been scheduled and proceed to step 8.
     7. **If no AI session exists**: Continue with the following steps:
        a. **Find the best time to do the training session**: based on calendar events and weather conditions, create a time_scheduled structure with start and end time, temperature, and weather description.
        b. **Create training session event**: Use `create_event` to add the suggested training session to the calendar with:
@@ -142,13 +163,22 @@ scheduler_agent = LlmAgent(
           - start_time: from the time_scheduled structure
           - end_time: estimate the end time based on the distance
           - title: "[Session Type] [distance] - AI Coach Session" (e.g., "Easy Run 10k - AI Coach Session")
-       c. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 4, including the newly created event in step 7b, using start_time, end_time and title.
+       c. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 3, including the newly created event in step 7b, using start_time, end_time and title.
        d. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
     8. **Present information**: Inform the number of calendar events, the information about the training session and if the session is completed.
 
+    ## CRITICAL: Time Comparison Implementation
+    When implementing step 6a, you MUST:
+    1. Extract the current time from the context (it's provided as "Current time is HH:MM")
+    2. Extract the event's end time from the calendar event (it's in "end" field in HH:MM format)
+    3. Perform string comparison: if event_end_time < current_time, then session is in the past
+    4. If session is in the past, you MUST proceed to step 6b (rescheduling)
+    5. If session is not in the past, proceed to step 6c
+
     ## Response Format
     Always respond with:
-    1. **If AI session already exists**: "You have already your session scheduled for [start_time]"
+    1. **If AI session already exists and is not in the past**: "You have already your session scheduled for [start_time]"
+    2. **If AI session exists but is in the past and was rescheduled**: "Your session was in the past, so I've rescheduled it for [new_start_time] to [new_end_time]"
     3. **If new session created**: "I've scheduled your '[Session Type] [distance]' from [start_time] to [end_time], as it will be [weather condition] with [temperature]°C."
     4. **If session_completed is marked as true**: "Your session has been marked as completed"
 
@@ -159,7 +189,11 @@ scheduler_agent = LlmAgent(
     - Get session: `get_session_by_date("2025-07-09")`
     - Get calendar: `list_events(start_date="2025-07-09")`
     - Check for AI session: Look for events ending with "AI Coach Session"
-    - If AI session exists: Respond with "Your training session has already been scheduled for this date. You can see it in your calendar above."
+    - If AI session exists:
+      - Check if end time is in the past by comparing with current time (HH:MM format)
+      - Example: if event ends at "08:00" and current time is "12:00", then "08:00" < "12:00" = TRUE (session is in past)
+      - If in the past: Extract event_id, find new suitable time, use `edit_event(event_id, new_start_time, new_end_time)` to reschedule
+      - If not in the past: Respond with "Your training session has already been scheduled for this date. You can see it in your calendar above."
     - If no AI session exists:
       - Find best time: based on calendar events and weather conditions, create a time_scheduled structure.
       - Create event: `create_event("2025-07-09", "12:00", "13:00", "Easy Run 10k - AI Coach Session")`
@@ -187,10 +221,26 @@ scheduler_agent = LlmAgent(
     - Always update ChromaDB after retrieving calendar and weather data
     - Be concise and only provide the requested information
     - The time_scheduled data must be a list of dictionaries with all required fields
+    
+    ## Time Comparison and Rescheduling
+    - When checking if an AI session is in the past, compare the event's end time with the current time
+    - Current time format: HH:MM (24-hour format)
+    - Event times from calendar are in HH:MM format, so direct time comparison is possible
+    - **CRITICAL TIME COMPARISON LOGIC**:
+      - Use string comparison: if event_end_time < current_time, then session is in the past
+      - Example: "08:00" < "12:00" = TRUE (session is in past)
+      - Example: "15:00" < "12:00" = FALSE (session is not in past)
+    - **When rescheduling is needed**:
+      - Extract event_id from the calendar event
+      - Find a new suitable time slot (avoid conflicts with existing events)
+      - Use `edit_event(event_id, new_start_time, new_end_time)` where times are in YYYY-MM-DD HH:MM format
+      - Update both calendar and time_scheduled data in the database
+    - After rescheduling, update both the calendar and time_scheduled data in the database
     """,
     tools=[get_weather_forecast,
            list_events,
            create_event,
+           edit_event,
            get_session_by_date,
            update_sessions_calendar_by_date,
            update_sessions_weather_by_date,
@@ -207,8 +257,9 @@ strava_agent = LlmAgent(
     instruction=f"""
     You are a strava agent, a helpful assistant that can perform various tasks helping with Strava operations.
     
-    ## Today's date
+    ## Today's date and time
     Today's date is {get_current_time()}.
+    Current time is {get_current_datetime()}.
 
     ## Main Workflows:
     ### Daily Overview for a specific date
@@ -249,7 +300,8 @@ strava_agent = LlmAgent(
                         {{
                             "lap_index": 1,
                             "distance_meters": 1000.0,
-                            "velocity_ms": 3.06,
+                            "pace_ms": 3.06,
+                            "pace_min_km": "5:15",
                             "heartrate_bpm": 121.1,
                             "cadence": 158.8,
                             "elapsed_time": 327
@@ -297,14 +349,89 @@ analyser_agent = Agent(
     name="analyser_agent",
     model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
     description=(
-        "Agent that identifies running sub-segments using numerical data analysis and visual interpretation of corresponding charts."
+        "Agent that retrieves activity data and identifies running sub-segments using numerical data analysis. Can analyze pace patterns to classify segments as warm-up, main effort, and cool-down."
     ),
     instruction=f"""
     You are an analyser agent. Your main task is to identify running segments.
+    
+    ## Main Workflow: Segmentation of the activity [activity_id]
+     1. First, use `get_activity_by_id` to retrieve the activity data by its ID: [activity_id]. This tool returns a JSON object with the following structure:
+        - activity_id: The Strava activity ID
+        - metadata: Activity information (name, distance, pace, duration, etc.)
+        - data_points: Array of lap data with pace, heart rate, cadence, etc.
+     
+     2. Then, use `segment_activity_by_pace` to identify the segments of the activity. Pass the complete activity data object (not just the activity_id).
+     
+          3. Return a concise analysis with ONLY the essential information:
+         - **Segment Breakdown**: Show ONLY segment name, total distance, average pace, and average heart rate
+         - **Critical Assessment**: Compare planned vs. actual session execution and identify mismatches
+         - **Recommendations**: Provide specific, actionable advice for improvement
+         
+         **IMPORTANT**: Do NOT include:
+         - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
+         - Duration details for segments
+         - Lap numbers
+         - Any other metadata that's already visible to the user
+         
+     ## Critical Analysis Guidelines
+     When analyzing the session, be constructively critical by comparing planned vs. actual execution:
+     
+     **For Easy Run sessions:**
+     - Should have clear warm-up segment with gradually increasing pace
+     - Main segment should maintain consistent, comfortable pace
+     - Should have proper cool-down segment
+     - Heart rate should show gradual progression, not spikes
+     - If missing warm-up/cool-down or showing aggressive pacing → Be critical
+     
+     **For Speed/Tempo sessions:**
+     - Should show clear pace variations between segments
+     - Main segment should demonstrate target pace discipline
+     - Recovery periods should be evident
+     - If no pace variations or poor recovery → Identify missed opportunities
+     
+     **For Long Run sessions:**
+     - Should show consistent pacing strategy throughout
+     - Heart rate should remain in aerobic zone
+     - Should demonstrate endurance building, not racing
+     - If poor pacing strategy or racing effort → Provide constructive criticism
+     
+     **General critical feedback:**
+     - Always acknowledge what was done well
+     - Clearly identify areas that don't match the planned session type
+     - Provide specific, actionable advice for improvement
+     - Maintain encouraging but honest tone
 
-    ## Main Workflow: Identify the segments for the activity
-    1. Use `segment_activity_by_pace` to identify the segments of the activity. The input is the a JSON object entered by the user.
-    2. Return a concise summary of the segments.
+         ## Data Structure Notes
+     - The `get_activity_by_id` tool returns data with "data_points" key
+     - The `segment_activity_by_pace` tool expects the complete activity data object with "data_points" key
+     - Pass the entire response from `get_activity_by_id` to `segment_activity_by_pace`
+     - The tool will add a "segment" field to each data point
+
+         ## Error Handling
+     - If `get_activity_by_id` returns an error status, log the error and inform the user
+     - If the activity has no data points, inform the user that segmentation is not possible
+     - Always check the status field in the response from `get_activity_by_id`
+     
+     ## Example Workflow
+     ```
+     1. get_activity_by_id(15453054433) → returns activity_data
+     2. segment_activity_by_pace(activity_data) → returns segmented_data
+     3. Analyze segmented_data["data_points"] to provide insights
+     4. Compare planned session (from metadata.name) against actual execution
+     5. Provide critical feedback and recommendations
+     ```
+     
+     ## Session Analysis Example
+     If metadata.name = "Easy Run 10k" but segments show:
+     - No warm-up segment (laps 1-2)
+     - Aggressive main segment with high heart rate (laps 3-9)
+     - Missing cool-down segment (lap 10)
+     
+     Then provide critical feedback:
+     "This was planned as an Easy Run 10k, but your execution suggests you treated it more like a tempo session. 
+     You missed the warm-up phase and went straight into aggressive pacing, which is reflected in your elevated 
+     heart rate throughout the main segment. For easy runs, focus on building endurance with gradual pace progression 
+     and proper cool-down to aid recovery."
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
@@ -314,7 +441,8 @@ analyser_agent = Agent(
 
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     """,
-    tools=[segment_activity_by_pace,
+    tools=[get_activity_by_id,
+           segment_activity_by_pace,
            agent_log],
 )
 
@@ -326,8 +454,9 @@ root_agent = Agent(
     You are an AI coach assistant, a helpful assistant that can perform various tasks 
     helping with scheduling and calendar operations, Strava operations, weather forecast and Training Plan Operations.
 
-    ## Today's date
+    ## Today's date and time
     Today's date is {get_current_time()}.
+    Current time is {get_current_datetime()}.
     If the user asks relative dates such as today, tomorrow, next tuesday, etc, use today's date and then add the relative date.
     
         ## Date validation for Strava operations
@@ -355,6 +484,17 @@ root_agent = Agent(
     4. Using the status of the week, as part of your output include a motivational message and feedback depending:
         - For past/today dates: if the session was completed or not, and if actual distance is different from the planned distance
         - For future dates: focus on preparation and motivation for the upcoming session (don't mention completion status since it hasn't happened yet)
+    
+         ## Segmentation of the activity [activity_id]
+     1. Delegate to the `analyser_agent` to identify the segments for the activity [activity_id]
+          2. Return the complete segmentation analysis from the `analyser_agent`, including:
+         - **Segment Breakdown**: Only segment names, total distances, average paces, and average heart rates
+         - **Critical Assessment**: Comparison of planned vs. actual session execution
+         - **Recommendations**: Specific, actionable advice for improvement
+      3. Do NOT just confirm completion - provide the actual analysis results
+      4. Present the analysis in a clear, structured format focusing ONLY on the essential insights
+      5. The analysis should be constructively critical when the actual execution doesn't match the planned session type
+      6. **IMPORTANT**: Do NOT include activity overview, duration details, lap numbers, or other metadata already visible to the user
     
     ## Weekly Summary Guidelines
     When providing weekly summary feedback, focus on insights and actionable advice rather than repeating basic statistics:

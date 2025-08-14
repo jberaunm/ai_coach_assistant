@@ -78,10 +78,11 @@ export default function WeeklyStats({ date }: WeeklyStatsProps) {
               </div>
               <div className="day-stats">
                 <div className="stat-item">
-                  <span className="stat-value session-type">{day.sessionType}</span>
+                  <span className="stat-value session-type">{day.session_type}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-value">{day.actual_distance}k</span>
+                  <span className="stat-value">
+                    {day.planned_distance === 0 ? "-" : day.actual_distance === 0 ? day.planned_distance + "k" : day.actual_distance + "k"}</span>
                 </div>
               </div>
             </div>
