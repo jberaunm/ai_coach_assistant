@@ -58,19 +58,8 @@ def list_events(
         else:
             try:
                 # Parse the provided start_date
-                requested_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
-                current_date = datetime.datetime.utcnow().date()
-                
-                if requested_date == current_date:
-                    # If the requested date is today, use current time as start_time
-                    start_time = datetime.datetime.utcnow()
-                    # Set end_time to the end of today (23:59:59)
-                    end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
-                else:
-                    # If the requested date is not today, use 00:00:00 of that specific date
-                    start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-                    # Set end_time to the end of that specific day (23:59:59)
-                    end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+                start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
             except ValueError:
                 return {
                     "status": "error",
@@ -134,6 +123,7 @@ def list_events(
                 end_time = "23:59"
             
             formatted_event = {
+                "event_id": event.get("id", " "),
                 "title": event.get("summary", "Untitled Event"),
                 "start": start_time,
                 "end": end_time,
@@ -154,3 +144,5 @@ def list_events(
             "message": f"Error fetching events: {str(e)}",
             "events": [],
         }
+
+#list_events("2025-08-12", 1)

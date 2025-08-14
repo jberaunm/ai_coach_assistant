@@ -636,7 +636,7 @@ button:active:not(:disabled) {
   border: 1px solid #e9ecef;
   background-color: #f8f9fa;
   transition: all 0.2s ease;
-  min-height: 35px;
+  min-height: 45px;
   min-width: 56px;
 }
 
@@ -710,15 +710,25 @@ button:active:not(:disabled) {
 }
 
 .stat-value {
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--primary-color);
 }
 
 .stat-value.session-type {
   font-size: 9px;
-  color: var(--secondary-color);
-  font-weight: 500;
+  color: #CC785C;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: inline-block;
+  min-width: 50px;
+  max-width: 55px;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.5;
+  text-align: center;
 }
 
 @media (max-width: 768px) {

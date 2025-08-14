@@ -72,17 +72,6 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
         
         hourly_data = weather.findall("hourly")
         
-        # Get current time to filter future hours
-        current_time = datetime.now()
-        target_date = datetime.strptime(date, "%Y-%m-%d")
-        
-        # If target date is today, filter by current hour
-        if target_date.date() == current_time.date():
-            current_hour = current_time.hour
-        else:
-            # If target date is in the future, include all hours
-            current_hour = -1
-        
         forecast_hours = []
         for hour in hourly_data:
             time_str = hour.findtext("time")
@@ -95,16 +84,14 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
             except ValueError:
                 continue
             
-            # Only include future hours
-            if hour_int > current_hour:
-                temp = hour.findtext("tempC")
-                condition = hour.findtext("weatherDesc")
+            temp = hour.findtext("tempC")
+            condition = hour.findtext("weatherDesc")
                 
-                forecast_hours.append({
-                    "time": f"{hour_int:02d}:00",
-                    "tempC": temp,
-                    "desc": condition.strip() if condition else "",
-                })
+            forecast_hours.append({
+                "time": f"{hour_int:02d}:00",
+                "tempC": temp,
+                "desc": condition.strip() if condition else "",
+            })
         
         return {
             "status": "success",

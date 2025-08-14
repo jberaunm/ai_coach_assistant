@@ -30,7 +30,7 @@ interface SessionData {
 interface DayStats {
   date: string;
   day_name: string;
-  sessionType: string;
+  session_type: string;
   planned_distance: number;
   actual_distance: number;
   session_completed: boolean;
