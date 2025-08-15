@@ -145,6 +145,9 @@ class ChromaService:
                         "hours": []
                     }),
                     "time_scheduled": json.dumps([]),
+                    "data_points": json.dumps({
+                        "laps": []
+                    }),
                     "session_completed": False
                 }
                 metadatas.append(session_metadata)
@@ -367,6 +370,13 @@ class ChromaService:
                     deserialized['time_scheduled'] = json.loads(deserialized['time_scheduled'])
                 except json.JSONDecodeError:
                     deserialized['time_scheduled'] = []
+            
+            # Deserialize data_points
+            if 'data_points' in deserialized and isinstance(deserialized['data_points'], str):
+                try:
+                    deserialized['data_points'] = json.loads(deserialized['data_points'])
+                except json.JSONDecodeError:
+                    deserialized['data_points'] = {"laps": []}
             
             return deserialized
         except Exception as e:
