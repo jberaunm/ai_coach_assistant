@@ -324,14 +324,31 @@ def update_sessions_time_scheduled_by_date(date: str, time_scheduled_data: list)
             "message": f"Error updating sessions time_scheduled by date: {str(e)}"
         }
 
-def mark_session_completed_by_date(date: str, id: int, actual_distance: int, actual_start: str):
+def mark_session_completed_by_date(date: str, id: int, actual_distance: int, actual_start: str, data_points: dict):
     """Mark the session as completed and optionally update the actual start time in time_scheduled and actual distance.
     
     Args:
         date: The date in YYYY-MM-DD format
         id: id of the session
-        actual_start: Actual start time in HH:MM format (e.g., "14:30")
         actual_distance: Actual distance in kilometers
+        actual_start: Actual start time in HH:MM format (e.g., "14:30")
+        data_points: List of laps data points from the activity with structure:
+            {
+                "data_points": {
+                    "laps": [
+                    {
+                        "lap_index": 1,
+                        "distance_meters": 1000.0,
+                        "pace_ms": 2.59,
+                        "pace_min_km": "6:26/km",
+                        "heartrate_bpm": 112.7,
+                        "cadence": 160.4,
+                        "elapsed_time": 440
+                    },
+                    // ... more laps
+                    ]
+                }
+            }
         
     Returns:
         Dict with status and message
@@ -339,7 +356,6 @@ def mark_session_completed_by_date(date: str, id: int, actual_distance: int, act
     try:
         # Get the session for the specified date (only one session per day)
         results = chroma_service.collection.get(where={"date": date})
-        print(f"Marking session status for {date} and linking to activity {id}")
         if not results['ids']:
             return {
                 "status": "error",
@@ -358,6 +374,8 @@ def mark_session_completed_by_date(date: str, id: int, actual_distance: int, act
 
         # Update the actual distance
         current_metadata['actual_distance'] = actual_distance
+
+        current_metadata['data_points'] = json.dumps(data_points)
         
         # Update actual start time in time_scheduled if provided
         if actual_start and 'time_scheduled' in current_metadata:

@@ -267,15 +267,15 @@ strava_agent = LlmAgent(
 
         1. **Get strava activities**: Use `get_activity_with_laps` with the requested date.
         2. **Check if activities were found**: If the response contains activities (status is "success"):
-        a. Extract the `activity_id` from the response
-        b. Extract the `actual_start` and `actual_distance` from the response metadata
-        c. Use the tool `mark_session_completed_by_date` with:
-            - date: the requested date
-            - id: the activity_id from the response
-            - actual_start: the actual_start time from the response metadata
-            - actual_distance: the actual_distance from the response metadata
-        d. Use the tool `write_activity_data` with the complete activity_data structure from the response
-        e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
+            a. Extract the `activity_id` from the response
+            b. Extract the `actual_start` and `actual_distance` from the response metadata
+            c. Use the tool `mark_session_completed_by_date` with:
+                - date: the requested date
+                - id: the activity_id from the response
+                - actual_start: the actual_start time from the response metadata
+                - actual_distance: the actual_distance from the response metadata
+                - data_points: the data_points from the response
+            e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
         
         * Response Structure from get_activity_with_laps
         The `get_activity_with_laps` tool returns a response with this structure:
@@ -320,10 +320,7 @@ strava_agent = LlmAgent(
         - id: activity_id from the response (e.g., 15162967332)
         - actual_start: actual_start from metadata (e.g., "08:33")
         - actual_distance: actual_distance from metadata (e.g., 10.52)
-
-        2. **write_activity_data**:
-        - activity_data: the complete activity_data object from the response
-        - This includes session text, metadata, and data_points
+        - data_points: data_points from the response
 
     ### "Create a running chart for the activity [activity_id]"
     When asked about a running chart for a specific activity, follow this exact process:
@@ -345,7 +342,7 @@ strava_agent = LlmAgent(
            agent_log],
 )
 
-analyser_agent = Agent(
+analyser_agent = LlmAgent(
     name="analyser_agent",
     model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
     description=(
@@ -354,84 +351,101 @@ analyser_agent = Agent(
     instruction=f"""
     You are an analyser agent. Your main task is to identify running segments.
     
-    ## Main Workflow: Segmentation of the activity [activity_id]
-     1. First, use `get_activity_by_id` to retrieve the activity data by its ID: [activity_id]. This tool returns a JSON object with the following structure:
-        - activity_id: The Strava activity ID
-        - metadata: Activity information (name, distance, pace, duration, etc.)
-        - data_points: Array of lap data with pace, heart rate, cadence, etc.
+    ## Main Workflow: Segmentation of the activity for [date]
+    1. First, use the tool `get_session_by_date` with the requested date, and extract the following information:
+        - metadata: Activity information (name, distance, pace, duration and data_points)
      
-     2. Then, use `segment_activity_by_pace` to identify the segments of the activity. Pass the complete activity data object (not just the activity_id).
+    2. Then, use `segment_activity_by_pace` to identify the segments of the activity. Pass the complete data_points object from the metadata.
      
-          3. Return a concise analysis with ONLY the essential information:
-         - **Segment Breakdown**: Show ONLY segment name, total distance, average pace, and average heart rate
-         - **Critical Assessment**: Compare planned vs. actual session execution and identify mismatches
-         - **Recommendations**: Provide specific, actionable advice for improvement
+    3. Return a concise analysis with ONLY the essential information:
+        - **Segment Breakdown**: Show ONLY segment name, total distance, average pace, and average heart rate
+        - **Critical Assessment**: Compare planned vs. actual session execution and identify mismatches
+        - **Recommendations**: Provide specific, actionable advice for improvement
          
-         **IMPORTANT**: Do NOT include:
-         - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
-         - Duration details for segments
-         - Lap numbers
-         - Any other metadata that's already visible to the user
+    **IMPORTANT**: Do NOT include:
+        - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
+        - Duration details for segments
+        - Lap numbers
+        - Any other metadata that's already visible to the user
          
-     ## Critical Analysis Guidelines
-     When analyzing the session, be constructively critical by comparing planned vs. actual execution:
+    ## Critical Analysis Guidelines
+    When analyzing the session, be constructively critical by comparing planned (metadata.type) vs. actual execution:
      
-     **For Easy Run sessions:**
-     - Should have clear warm-up segment with gradually increasing pace
-     - Main segment should maintain consistent, comfortable pace
-     - Should have proper cool-down segment
-     - Heart rate should show gradual progression, not spikes
-     - If missing warm-up/cool-down or showing aggressive pacing → Be critical
+    **For Easy Run sessions:**
+    - Should have clear warm-up segment with gradually increasing pace
+    - Main segment should maintain consistent, comfortable pace
+    - Should have proper cool-down segment
+    - Heart rate should show gradual progression, not spikes
+    - If missing warm-up/cool-down or showing aggressive pacing → Be critical
      
-     **For Speed/Tempo sessions:**
-     - Should show clear pace variations between segments
-     - Main segment should demonstrate target pace discipline
-     - Recovery periods should be evident
-     - If no pace variations or poor recovery → Identify missed opportunities
+    **For Speed/Tempo sessions:**
+    - Should show clear pace variations between segments
+    - Main segment should demonstrate target pace discipline
+    - Recovery periods should be evident
+    - If no pace variations or poor recovery → Identify missed opportunities
      
-     **For Long Run sessions:**
-     - Should show consistent pacing strategy throughout
-     - Heart rate should remain in aerobic zone
-     - Should demonstrate endurance building, not racing
-     - If poor pacing strategy or racing effort → Provide constructive criticism
+    **For Long Run sessions:**
+    - Should show consistent pacing strategy throughout
+    - Heart rate should remain in aerobic zone
+    - Should demonstrate endurance building, not racing
+    - If poor pacing strategy or racing effort → Provide constructive criticism
      
-     **General critical feedback:**
-     - Always acknowledge what was done well
-     - Clearly identify areas that don't match the planned session type
-     - Provide specific, actionable advice for improvement
-     - Maintain encouraging but honest tone
+    **General critical feedback:**
+    - Always acknowledge what was done well
+    - Clearly identify areas that don't match the planned session type
+    - Provide specific, actionable advice for improvement
+    - Maintain encouraging but honest tone
 
-         ## Data Structure Notes
-     - The `get_activity_by_id` tool returns data with "data_points" key
-     - The `segment_activity_by_pace` tool expects the complete activity data object with "data_points" key
-     - Pass the entire response from `get_activity_by_id` to `segment_activity_by_pace`
-     - The tool will add a "segment" field to each data point
+    ## Data Structure Notes
+    - The `get_session_by_date` tool returns data with "data_points" key
+    - The `segment_activity_by_pace` tool expects input with a "laps" key containing the lap data
+    - Extract the laps from data_points and pass them to `segment_activity_by_pace` in the format: "laps": [...]
+    - The tool will add a "segment" field to each lap
 
-         ## Error Handling
-     - If `get_activity_by_id` returns an error status, log the error and inform the user
-     - If the activity has no data points, inform the user that segmentation is not possible
-     - Always check the status field in the response from `get_activity_by_id`
+    ## Error Handling
+    - If `get_session_by_date` returns an error status, log the error and inform the user
+    - If the activity has no data points, inform the user that segmentation is not possible
+    - Always check the status field in the response from `get_session_by_date`
      
-     ## Example Workflow
-     ```
-     1. get_activity_by_id(15453054433) → returns activity_data
-     2. segment_activity_by_pace(activity_data) → returns segmented_data
-     3. Analyze segmented_data["data_points"] to provide insights
-     4. Compare planned session (from metadata.name) against actual execution
-     5. Provide critical feedback and recommendations
-     ```
+    ## Example Workflow
+    ```
+    1. get_session_by_date(2025-07-19) → returns session_data
+    2. Extract laps from session_data.metadata.data_points
+    3. segment_activity_by_pace("laps": [...]) → returns segmented_data
+    4. Analyze segmented_data["laps"] to provide insights
+    5. Compare planned session (session_data.metadata.type) against actual execution
+    6. Provide critical feedback and recommendations
+    ```
      
-     ## Session Analysis Example
-     If metadata.name = "Easy Run 10k" but segments show:
-     - No warm-up segment (laps 1-2)
-     - Aggressive main segment with high heart rate (laps 3-9)
-     - Missing cool-down segment (lap 10)
-     
-     Then provide critical feedback:
-     "This was planned as an Easy Run 10k, but your execution suggests you treated it more like a tempo session. 
-     You missed the warm-up phase and went straight into aggressive pacing, which is reflected in your elevated 
-     heart rate throughout the main segment. For easy runs, focus on building endurance with gradual pace progression 
-     and proper cool-down to aid recovery."
+    ## Session Analysis Guidelines
+    Analyze the actual execution against the planned session type and provide constructive feedback:
+    
+    **For Easy Runs:**
+    - Check if there's a proper warm-up phase (gradual pace progression)
+    - Verify heart rate stays in easy zone (typically 60-70% of max HR)
+    - Ensure proper cool-down is included
+    
+    **For Tempo Runs:**
+    - Verify sustained effort in the middle segment
+    - Check if pace is appropriately challenging but sustainable
+    - Ensure proper warm-up and cool-down
+    
+    **For Long Runs:**
+    - Check if pace is conversational and sustainable
+    - Verify heart rate stays in aerobic zone
+    - Ensure proper hydration and fueling strategy
+    
+    **General Assessment:**
+    - Compare planned vs actual distance
+    - Analyze pace consistency and progression
+    - Evaluate heart rate zones and effort distribution
+    - Provide specific, actionable recommendations for improvement
+    
+    **Feedback Structure:**
+    1. **Execution Assessment**: How well the actual execution matched the planned session type
+    2. **Specific Issues**: Identify any deviations from the planned approach
+    3. **Recommendations**: Provide actionable advice for future sessions
+    4. **Positive Reinforcement**: Acknowledge what was done well
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
@@ -441,7 +455,7 @@ analyser_agent = Agent(
 
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     """,
-    tools=[get_activity_by_id,
+    tools=[get_session_by_date,
            segment_activity_by_pace,
            agent_log],
 )
@@ -459,18 +473,18 @@ root_agent = Agent(
     Current time is {get_current_datetime()}.
     If the user asks relative dates such as today, tomorrow, next tuesday, etc, use today's date and then add the relative date.
     
-        ## Date validation for Strava operations
-     IMPORTANT: Strava only contains activities that have already happened (past activities). 
-     - For dates in the past or today: Strava operations are valid
-     - For dates in the future: Strava operations are NOT valid and should NOT be performed
-     Always check if the requested date is in the future before attempting any Strava-related operations.
+    ## Date validation for Strava operations
+    IMPORTANT: Strava only contains activities that have already happened (past activities). 
+    - For dates in the past or today: Strava operations are valid
+    - For dates in the future: Strava operations are NOT valid and should NOT be performed
+    Always check if the requested date is in the future before attempting any Strava-related operations.
      
-     ## Future date handling
-     When dealing with future dates:
-     - DO NOT mention "session completion status" since the session hasn't happened yet
-     - DO NOT say "the session is not completed" for future dates
-     - Instead, focus on preparation, scheduling, and motivation for the upcoming session
-     - Use language like "you have planned", "your upcoming session", "prepare for", etc.
+    ## Future date handling
+    When dealing with future dates:
+    - DO NOT mention "session completion status" since the session hasn't happened yet
+    - DO NOT say "the session is not completed" for future dates
+    - Instead, focus on preparation, scheduling, and motivation for the upcoming session
+    - Use language like "you have planned", "your upcoming session", "prepare for", etc.
 
     ## MAIN WORKFLOWS
 
@@ -485,16 +499,16 @@ root_agent = Agent(
         - For past/today dates: if the session was completed or not, and if actual distance is different from the planned distance
         - For future dates: focus on preparation and motivation for the upcoming session (don't mention completion status since it hasn't happened yet)
     
-         ## Segmentation of the activity [activity_id]
-     1. Delegate to the `analyser_agent` to identify the segments for the activity [activity_id]
-          2. Return the complete segmentation analysis from the `analyser_agent`, including:
-         - **Segment Breakdown**: Only segment names, total distances, average paces, and average heart rates
-         - **Critical Assessment**: Comparison of planned vs. actual session execution
-         - **Recommendations**: Specific, actionable advice for improvement
-      3. Do NOT just confirm completion - provide the actual analysis results
-      4. Present the analysis in a clear, structured format focusing ONLY on the essential insights
-      5. The analysis should be constructively critical when the actual execution doesn't match the planned session type
-      6. **IMPORTANT**: Do NOT include activity overview, duration details, lap numbers, or other metadata already visible to the user
+    ## Segmentation of activity for [date]
+    1. Delegate to the `analyser_agent` to identify the segments of the activity for the requested date.
+    2. Return the complete segmentation analysis from the `analyser_agent`, including:
+        - **Segment Breakdown**: Only segment names, total distances, average paces, and average heart rates
+        - **Critical Assessment**: Comparison of planned vs. actual session execution
+        - **Recommendations**: Specific, actionable advice for improvement
+    3. Do NOT just confirm completion - provide the actual analysis results
+    4. Present the analysis in a clear, structured format focusing ONLY on the essential insights
+    5. The analysis should be constructively critical when the actual execution doesn't match the planned session type
+    6. **IMPORTANT**: Do NOT include activity overview, duration details, lap numbers, or other metadata already visible to the user
     
     ## Weekly Summary Guidelines
     When providing weekly summary feedback, focus on insights and actionable advice rather than repeating basic statistics:
