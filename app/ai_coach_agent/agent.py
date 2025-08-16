@@ -40,6 +40,7 @@ from .tools import (
     plot_running_chart_laps,
     get_activity_by_id,
     segment_activity_by_pace,
+    update_session_with_analysis,
     agent_log
 )
 
@@ -358,18 +359,21 @@ analyser_agent = LlmAgent(
     2. Then, use `segment_activity_by_pace` to identify the segments of the activity. Pass the complete data_points object from the metadata.
      
     3. Return a concise analysis with ONLY the essential information:
-        - **Segment Breakdown**: Show ONLY segment name, total distance, average pace, and average heart rate
         - **Critical Assessment**: Compare planned vs. actual session execution and identify mismatches
         - **Recommendations**: Provide specific, actionable advice for improvement
+    
+    4. Update the session data in the database with the segmented data and coach feedback using the tool `update_session_with_analysis`:
+        - Update the data_points.laps with segment information for each lap
+        - Store the analysis in a new field called "coach_feedback"
          
-    **IMPORTANT**: Do NOT include:
+    **IMPORTANT**: In the analysis, do NOT include:
         - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
         - Duration details for segments
         - Lap numbers
         - Any other metadata that's already visible to the user
          
     ## Critical Analysis Guidelines
-    When analyzing the session, be constructively critical by comparing planned (metadata.type) vs. actual execution:
+    When analyzing the session, be constructively critical by comparing planned (metadata.type) and distance (metadata.distance) vs. actual execution:
      
     **For Easy Run sessions:**
     - Should have clear warm-up segment with gradually increasing pace
@@ -401,6 +405,7 @@ analyser_agent = LlmAgent(
     - The `segment_activity_by_pace` tool expects input with a "laps" key containing the lap data
     - Extract the laps from data_points and pass them to `segment_activity_by_pace` in the format: "laps": [...]
     - The tool will add a "segment" field to each lap
+    - The `update_session_with_analysis` tool will store the segmented data and coach feedback in the session metadata
 
     ## Error Handling
     - If `get_session_by_date` returns an error status, log the error and inform the user
@@ -412,9 +417,10 @@ analyser_agent = LlmAgent(
     1. get_session_by_date(2025-07-19) → returns session_data
     2. Extract laps from session_data.metadata.data_points
     3. segment_activity_by_pace("laps": [...]) → returns segmented_data
-    4. Analyze segmented_data["laps"] to provide insights
-    5. Compare planned session (session_data.metadata.type) against actual execution
-    6. Provide critical feedback and recommendations
+    4. Analyze segmented_data["laps"] to provide insights and create coach_feedback
+    5. Update session data with segments and coach_feedback using update_session_with_analysis
+    6. Compare planned session type (session_data.metadata.type) and distance (session_data.metadata.distance) against actual execution
+    7. Provide critical feedback and recommendations
     ```
      
     ## Session Analysis Guidelines
@@ -457,6 +463,7 @@ analyser_agent = LlmAgent(
     """,
     tools=[get_session_by_date,
            segment_activity_by_pace,
+           update_session_with_analysis,
            agent_log],
 )
 
@@ -501,14 +508,19 @@ root_agent = Agent(
     
     ## Segmentation of activity for [date]
     1. Delegate to the `analyser_agent` to identify the segments of the activity for the requested date.
-    2. Return the complete segmentation analysis from the `analyser_agent`, including:
-        - **Segment Breakdown**: Only segment names, total distances, average paces, and average heart rates
+    2. The analyser_agent will:
+        - Retrieve the session data for the requested date
+        - Segment the activity by pace to identify warm-up, main effort, and cool-down phases
+        - Analyze the execution against the planned session type
+        - Update the session data with segments and coach feedback
+        - Return the complete analysis
+    3. Return the complete segmentation analysis from the `analyser_agent`, including:
         - **Critical Assessment**: Comparison of planned vs. actual session execution
         - **Recommendations**: Specific, actionable advice for improvement
-    3. Do NOT just confirm completion - provide the actual analysis results
-    4. Present the analysis in a clear, structured format focusing ONLY on the essential insights
-    5. The analysis should be constructively critical when the actual execution doesn't match the planned session type
-    6. **IMPORTANT**: Do NOT include activity overview, duration details, lap numbers, or other metadata already visible to the user
+    4. Do NOT just confirm completion or provide a Segment Breakdown - provide the actual analysis results
+    5. Present the analysis in a clear, structured format focusing ONLY on the essential insights
+    6. The analysis should be constructively critical when the actual execution doesn't match the planned session type
+    7. **IMPORTANT**: Do NOT include activity overview, duration details, lap numbers, or other metadata already visible to the user
     
     ## Weekly Summary Guidelines
     When providing weekly summary feedback, focus on insights and actionable advice rather than repeating basic statistics:

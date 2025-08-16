@@ -585,6 +585,98 @@ button:active:not(:disabled) {
   width: 100%;
 }
 
+/* Insights Component Styling */
+.insights-card {
+  width: 100%;
+}
+
+.insights-content {
+  text-align: left;
+  padding: 16px 0;
+}
+
+.coach-feedback {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid var(--secondary-color);
+  max-height: 400px;
+  overflow-y: auto;
+  line-height: 1.6;
+  font-size: 14px;
+  color: #374151;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Markdown styling within coach feedback */
+.coach-feedback h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin: 16px 0 8px 0;
+  border-bottom: 2px solid var(--secondary-color);
+  padding-bottom: 4px;
+}
+
+.coach-feedback h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin: 14px 0 6px 0;
+  border-bottom: 1px solid var(--secondary-color);
+  padding-bottom: 2px;
+}
+
+.coach-feedback h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin: 12px 0 6px 0;
+}
+
+.coach-feedback p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.coach-feedback strong {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.coach-feedback em {
+  font-style: italic;
+  color: #6c757d;
+}
+
+.coach-feedback ul, .coach-feedback ol {
+  margin: 8px 0 8px 20px;
+  padding-left: 0;
+}
+
+.coach-feedback li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.coach-feedback .numbered-list {
+  list-style-type: decimal;
+  margin: 8px 0 8px 20px;
+  padding-left: 20px;
+}
+
+.coach-feedback .bullet-list {
+  list-style-type: disc;
+  margin: 8px 0 8px 20px;
+  padding-left: 20px;
+}
+
+.coach-feedback .numbered-list li,
+.coach-feedback .bullet-list li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
 .weekly-totals {
   display: flex;
   justify-content: space-between;
