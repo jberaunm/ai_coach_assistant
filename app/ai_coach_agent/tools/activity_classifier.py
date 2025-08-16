@@ -24,7 +24,6 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
         "Cool down".
     """
     print(f"[ActivityClassifier_tool] Segmenting activity by pace")
-    print(f"[ActivityClassifier_tool] Input data: {activity_data}")
     
     # Create a deep copy of the input data to avoid modifying the original object.
     segmented_data = copy.deepcopy(activity_data)
@@ -44,7 +43,6 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
     # Validate that laps have required fields
     if laps and len(laps) > 0:
         first_lap = laps[0]
-        print(f"[ActivityClassifier_tool] First lap keys: {list(first_lap.keys())}")
         if "pace_ms" not in first_lap:
             print(f"[ActivityClassifier_tool] Warning: pace_ms field not found in laps")
             return segmented_data
@@ -114,9 +112,7 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
             main_paces_start_index = 0
             main_paces_end_index = num_laps - 1
 
-    # --- Step 4: Classify all laps based on the identified main segment ---
-    print(f"[ActivityClassifier_tool] Main segment: laps {main_paces_start_index} to {main_paces_end_index}")
-    
+    # --- Step 4: Classify all laps based on the identified main segment ---    
     # Assign segments to all laps
     for i, lap in enumerate(laps):
         if i < main_paces_start_index:
@@ -131,7 +127,7 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
     main_count = sum(1 for lap in laps if lap.get("segment") == "Main")
     cool_down_count = sum(1 for lap in laps if lap.get("segment") == "Cool down")
     
-    print(f"[ActivityClassifier_tool] Segmentation complete: {warm_up_count} warm up, {main_count} main, {cool_down_count} cool down")
-    print(f"[ActivityClassifier_tool] Segmented data: {segmented_data}")
+    print(f"[ActivityClassifier_tool] Segmentation complete: {warm_up_count}k warm up, {main_count}k main, {cool_down_count}k cool down")
+    
     return segmented_data
 

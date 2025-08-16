@@ -708,3 +708,85 @@ def get_weekly_sessions(start_date: str) -> Dict:
             "summary": None,
             "message": f"Error retrieving weekly sessions: {str(e)}"
         }
+
+def update_session_with_analysis(date: str, segmented_data: Dict[str, Any], coach_feedback: str):
+    """Update session data with segmented analysis and coach feedback.
+    
+    Args:
+        date: The date in YYYY-MM-DD format
+        segmented_data: Dictionary containing segmented data with structure:
+            {
+                "laps": [
+                    {
+                        "lap_index": int,
+                        "distance_meters": float,
+                        "pace_ms": float,
+                        "pace_min_km": str,
+                        "heartrate_bpm": float,
+                        "cadence": float,
+                        "elapsed_time": int,
+                        "segment": str  # New field added by segmentation
+                    }
+                ]
+            }
+        coach_feedback: String containing the analysis and recommendations
+        
+    Returns:
+        Dict with status and message
+    """
+    try:
+        # Get the session for the specified date
+        print(f"Updating session with analysis for {date} with data: {segmented_data} and coach feedback: {coach_feedback}")
+        results = chroma_service.collection.get(where={"date": date})        
+        if not results['ids']:
+            return {
+                "status": "error",
+                "message": f"No session found for date: {date}"
+            }
+        
+        # Get the single session (there's only one per day)
+        session_id = results['ids'][0]
+        current_metadata = results['metadatas'][0]
+        
+        # Update the data_points with segmented data
+        if 'data_points' in current_metadata:
+            try:
+                # Parse existing data_points if it's a JSON string
+                existing_data_points = json.loads(current_metadata['data_points']) if isinstance(current_metadata['data_points'], str) else current_metadata['data_points']
+                
+                # Update the laps with segment information
+                if 'laps' in existing_data_points and 'laps' in segmented_data:
+                    existing_data_points['laps'] = segmented_data['laps']
+                
+                # Store updated data_points
+                current_metadata['data_points'] = json.dumps(existing_data_points)
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"Warning: Could not update existing data_points: {e}")
+                # If parsing fails, create new data_points structure
+                current_metadata['data_points'] = json.dumps(segmented_data)
+        else:
+            # If no existing data_points, create new one
+            current_metadata['data_points'] = json.dumps(segmented_data)
+        
+        # Add coach feedback
+        current_metadata['coach_feedback'] = coach_feedback
+        
+        # Update the session
+        chroma_service.collection.update(
+            ids=[session_id],
+            metadatas=[current_metadata]
+        )
+        
+        print(f"Successfully updated session analysis for {date}")
+        return {
+            "status": "success",
+            "message": f"Successfully updated session analysis for {date}",
+            "segments_count": len(segmented_data.get('laps', [])),
+            "feedback_length": len(coach_feedback)
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error updating session analysis: {str(e)}"
+        }

@@ -7,6 +7,7 @@ import DayOverviewCard from "./components/DayOverviewCard";
 import EventsCalendar from "./components/EventsCalendar";
 import WeatherForecast from "./components/WeatherForecast";
 import WeeklyStats from "./components/WeeklyStats";
+import Insights from "./components/Insights";
 import AgentFlowDiagram from "./components/AgentFlowDiagram";
 import AgentFlowDiagramReactFlow from "./components/AgentFlowDiagramReactFlow";
 import { SessionDataProvider } from "./contexts/SessionDataContext";
@@ -126,6 +127,7 @@ export default function Home() {
           </div>
           <div className="side-containers">
             <WeeklyStats date={sharedDate} />
+            <Insights date={sharedDate} />
             <div className="stat-card">
               <h1>Training plan</h1>
               <FileUpload websocket={websocket} />

@@ -24,6 +24,7 @@ interface SessionData {
         desc: string;
       }>;
     };
+    coach_feedback?: string;
   };
 }
 
