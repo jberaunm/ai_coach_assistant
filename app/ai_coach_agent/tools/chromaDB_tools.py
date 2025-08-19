@@ -115,6 +115,7 @@ def get_session_by_date(date: str):
     Returns:
         dict: The session for today in YYYY-MM-DD format, or a message if none found.
     """
+    print(f"[chromaDB_tools] Getting session by date: {date}")
     session = chroma_service.get_session_by_date(date)
     if session:
         return {"session": session}
@@ -736,7 +737,7 @@ def update_session_with_analysis(date: str, segmented_data: Dict[str, Any], coac
     """
     try:
         # Get the session for the specified date
-        print(f"Updating session with analysis for {date} with data: {segmented_data} and coach feedback: {coach_feedback}")
+        print(f"[chromaDB_tools] Updating session with analysis for {date} and coach feedback: {coach_feedback}")
         results = chroma_service.collection.get(where={"date": date})        
         if not results['ids']:
             return {
