@@ -9,8 +9,15 @@ interface InsightsProps {
 const parseMarkdown = (text: string) => {
   if (!text) return text;
   
+  // First, normalize the text to handle cases where headers are followed immediately by content
+  // Add line breaks after headers if they're missing
+  let normalizedText = text
+    .replace(/(###\s+[^\n]+)\s+(?=\*\*)/g, '$1\n\n')
+    .replace(/(##\s+[^\n]+)\s+(?=\*\*)/g, '$1\n\n')
+    .replace(/(#\s+[^\n]+)\s+(?=\*\*)/g, '$1\n\n');
+  
   // Split into lines for better processing
-  const lines = text.split('\n');
+  const lines = normalizedText.split('\n');
   let result = [];
   let inList = false;
   let listItems = [];

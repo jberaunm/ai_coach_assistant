@@ -136,9 +136,9 @@ scheduler_agent = LlmAgent(
     ## Main Workflow: "Day overview for [date]"
     When asked about a schedule for a specific date, follow this exact process:
 
-    1. **Get weather forecast**: Use tool `get_weather_forecast` with [date]
+    1. **Get weather forecast**: Use tool `get_weather_forecast` with [date]. If the weather is not available, skip to step 3.
     2. **Update weather in DB**: Use tool `update_sessions_weather_by_date`
-    3. **Get calendar events**: Use tool `list_events` with [date]
+    3. **Get calendar events**: Use tool `list_events` with [date]. If no events are found, skip to step 4.
     4. **Get training session**: Use tool `get_session_by_date` with the requested date. Extract *session_completed* and if it's set to *true*, END the workflow and only inform that the session has already been completed.
     5. **Check for existing AI training session**: Look through the calendar events from step 3. If any event has a title ending with "AI Coach Session", then a training session has already been scheduled for this date.
     6. **If AI session exists**:
@@ -276,7 +276,7 @@ strava_agent = LlmAgent(
                 - actual_start: the actual_start time from the response metadata
                 - actual_distance: the actual_distance from the response metadata
                 - data_points: the data_points from the response
-            e. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
+            d. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
         
         * Response Structure from get_activity_with_laps
         The `get_activity_with_laps` tool returns a response with this structure:
@@ -302,7 +302,7 @@ strava_agent = LlmAgent(
                             "lap_index": 1,
                             "distance_meters": 1000.0,
                             "pace_ms": 3.06,
-                            "pace_min_km": "5:15",
+                            "pace_min_km": "5:15km",
                             "heartrate_bpm": 121.1,
                             "cadence": 158.8,
                             "elapsed_time": 327
@@ -322,11 +322,6 @@ strava_agent = LlmAgent(
         - actual_start: actual_start from metadata (e.g., "08:33")
         - actual_distance: actual_distance from metadata (e.g., 10.52)
         - data_points: data_points from the response
-
-    ### "Create a running chart for the activity [activity_id]"
-    When asked about a running chart for a specific activity, follow this exact process:
-    1. **Create a running chart**: Use `plot_running_chart` with the activity_id
-    2. **Check if the chart was created**: If the response contains a chart (status is "success"):
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution:
@@ -351,27 +346,42 @@ analyser_agent = LlmAgent(
     ),
     instruction=f"""
     You are an analyser agent. Your main task is to identify running segments.
-    
+
+    ## Today's date and time
+    Today's date is {get_current_time()}.
+    Current time is {get_current_datetime()}.
+    If the user asks relative dates such as today, tomorrow, next tuesday, etc, use today's date and then add the relative date.
+
     ## Main Workflow: Segmentation of the activity for [date]
     1. First, use the tool `get_session_by_date` with the requested date, and extract the following information:
         - metadata: Activity information (name, distance, pace, duration and data_points)
      
     2. Then, use `segment_activity_by_pace` to identify the segments of the activity. Pass the complete data_points object from the metadata.
      
-    3. Return a concise analysis with ONLY the essential information:
+    3. Create the field "coach_feedback" with an analysis that MUST include:
         - **Critical Assessment**: Compare planned vs. actual session execution and identify mismatches
         - **Recommendations**: Provide specific, actionable advice for improvement
     
     4. Update the session data in the database with the segmented data and coach feedback using the tool `update_session_with_analysis`:
         - Update the data_points.laps with segment information for each lap
         - Store the analysis in a new field called "coach_feedback"
+    
+    5. **CRITICAL SUCCESS HANDLING**: After calling `update_session_with_analysis`:
+        - Check the response status field
+        - If status is "success": Return ONLY "Segmentation completed successfully"
+        - If status is "error": Log the error and inform the user about the failure
+        - NEVER return error messages when the tool indicates success
+    
+    6. **RESPONSE FORMAT**: Your final response must be one of these two options:
+        - **Success**: "Segmentation completed successfully" (when status = "success")
+        - **Failure**: Brief error description (only when status = "error")
          
     **IMPORTANT**: In the analysis, do NOT include:
         - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
         - Duration details for segments
         - Lap numbers
         - Any other metadata that's already visible to the user
-         
+     
     ## Critical Analysis Guidelines
     When analyzing the session, be constructively critical by comparing planned (metadata.type) and distance (metadata.distance) vs. actual execution:
      
@@ -411,6 +421,7 @@ analyser_agent = LlmAgent(
     - If `get_session_by_date` returns an error status, log the error and inform the user
     - If the activity has no data points, inform the user that segmentation is not possible
     - Always check the status field in the response from `get_session_by_date`
+    - **CRITICAL**: For `update_session_with_analysis`, always check the status field and only return error messages when status = "error"
      
     ## Example Workflow
     ```
@@ -418,9 +429,13 @@ analyser_agent = LlmAgent(
     2. Extract laps from session_data.metadata.data_points
     3. segment_activity_by_pace("laps": [...]) → returns segmented_data
     4. Analyze segmented_data["laps"] to provide insights and create coach_feedback
-    5. Update session data with segments and coach_feedback using update_session_with_analysis
-    6. Compare planned session type (session_data.metadata.type) and distance (session_data.metadata.distance) against actual execution
-    7. Provide critical feedback and recommendations
+    5. Create coach_feedback field with analysis (Critical Assessment + Recommendations)
+    6. Update session data with segments and coach_feedback using update_session_with_analysis
+    7. Check response status from update_session_with_analysis:
+       - If status = "success": Return "Segmentation completed successfully"
+       - If status = "error": Return error message
+    8. Compare planned session type (session_data.metadata.type) and distance (session_data.metadata.distance) against actual execution
+    9. Store the critical feedback and recommendations in the session data
     ```
      
     ## Session Analysis Guidelines
@@ -498,29 +513,20 @@ root_agent = Agent(
     ## Day overview for [date]
     1. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
     2. Delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
-        **CRITICAL**: Before calling strava_agent, check if the date is today or in the future:
-       - If the date is today or in the past: delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
-       - If the date is in the future: DO NOT delegate to the `strava_agent` as there can be no activities for future dates.
     3. Fetch the weekly summary using the tool `get_weekly_sessions` using the date of the session. If the date is in the future, you MUST NOT delegate to the `get_weekly_sessions` as there can be no activities for future dates.
     4. Using the status of the week, as part of your output include a motivational message and feedback depending:
         - For past/today dates: if the session was completed or not, and if actual distance is different from the planned distance
         - For future dates: focus on preparation and motivation for the upcoming session (don't mention completion status since it hasn't happened yet)
     
     ## Segmentation of activity for [date]
-    1. Delegate to the `analyser_agent` to identify the segments of the activity for the requested date.
+    1. Delegate immediately to the `analyser_agent` to identify the segments of the activity for the requested date.
     2. The analyser_agent will:
         - Retrieve the session data for the requested date
         - Segment the activity by pace to identify warm-up, main effort, and cool-down phases
         - Analyze the execution against the planned session type
         - Update the session data with segments and coach feedback
         - Return the complete analysis
-    3. Return the complete segmentation analysis from the `analyser_agent`, including:
-        - **Critical Assessment**: Comparison of planned vs. actual session execution
-        - **Recommendations**: Specific, actionable advice for improvement
-    4. Do NOT just confirm completion or provide a Segment Breakdown - provide the actual analysis results
-    5. Present the analysis in a clear, structured format focusing ONLY on the essential insights
-    6. The analysis should be constructively critical when the actual execution doesn't match the planned session type
-    7. **IMPORTANT**: Do NOT include activity overview, duration details, lap numbers, or other metadata already visible to the user
+    3. Return the confirmation of the completion of the analysis from the `analyser_agent`
     
     ## Weekly Summary Guidelines
     When providing weekly summary feedback, focus on insights and actionable advice rather than repeating basic statistics:

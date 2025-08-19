@@ -17,6 +17,18 @@ interface SessionData {
         end: string;
       }>;
     };
+    data_points: {
+      laps: Array<{
+        lap_index: number;
+        distance_meters: number;
+        pace_ms: number;
+        pace_min_km: string;
+        heartrate_bpm: number;
+        cadence: number;
+        elapsed_time: number;
+        segment: string;
+      }>;
+    };
     weather: {
       hours: Array<{
         time: string;

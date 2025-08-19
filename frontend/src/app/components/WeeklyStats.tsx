@@ -34,8 +34,8 @@ export default function WeeklyStats({ date }: WeeklyStatsProps) {
     return (
       <div className="stat-card weekly-stats-card">
         <h1>Weekly Overview</h1>
-        <div style={{ textAlign: "center", padding: "20px", color: "#f44336" }}>
-          Error: {error}
+        <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+          No data available for this week
         </div>
       </div>
     );
