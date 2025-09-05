@@ -15,6 +15,7 @@ from .chromaDB_tools import write_chromaDB,get_session_by_date,update_sessions_c
 from .plot_running_chart import plot_running_chart, plot_running_chart_laps
 from .agent_logger import agent_log
 from .activity_classifier import segment_activity_by_pace
+from .rag_knowledge import initialize_rag_knowledge, retrieve_rag_knowledge, get_all_rag_categories
 
 __all__ = [
     "create_event",
@@ -39,5 +40,8 @@ __all__ = [
     "write_activity_data",
     "plot_running_chart",
     "plot_running_chart_laps",
-    "agent_log"
+    "agent_log",
+    "initialize_rag_knowledge",
+    "retrieve_rag_knowledge",
+    "get_all_rag_categories"
 ]
