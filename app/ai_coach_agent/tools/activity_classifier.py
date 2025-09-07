@@ -1,11 +1,13 @@
 import statistics
 import copy
+import json
 from typing import Dict, List, Any
+from .chromaDB_tools import chroma_service
 
-def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
+def segment_activity_by_pace(activity_data: Dict[str, Any], date: str) -> Dict[str, Any]:
     """
     Segments a running activity's laps into 'Warm up', 'Main', and 'Cool down' 
-    based on a statistical analysis of lap pace.
+    based on a statistical analysis of lap pace and stores the segmented data in the database.
 
     This function uses a more robust approach to identify the core "Main" 
     segment. It first finds the average pace of the middle 50% of laps and then 
@@ -16,20 +18,112 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         activity_data: A dictionary containing activity details, including a list 
-                       of laps with 'pace' values.
+                       of laps with 'pace' values. Can be either:
+                       - {"laps": [...]} - Direct laps array
+                       - {"data_points": {"laps": [...]}} - Data points structure
+                       - If laps already have 'segment' field, segmentation will be skipped
+        date: Optional date string (YYYY-MM-DD) to store the segmented data in the database.
+              If provided, the segmented data will be stored in the session metadata.
 
     Returns:
-        A new dictionary with the same structure as the input, but with a new 
-        'segment' key added to each lap, classified as "Warm up", "Main", or 
-        "Cool down".
+        A dictionary with status and message indicating success or failure of the operation.
+        If date is provided, also includes the segmented data structure.
     """
     print(f"[ActivityClassifier_tool] Segmenting activity by pace")
     
     # Create a deep copy of the input data to avoid modifying the original object.
     segmented_data = copy.deepcopy(activity_data)
     
-    # Get laps from the input
-    laps = segmented_data.get("laps", [])
+    # Get laps from the input - handle both data structures
+    if "laps" in segmented_data:
+        # Direct laps structure: {"laps": [...]}
+        laps = segmented_data.get("laps", [])
+    elif "data_points" in segmented_data and "laps" in segmented_data.get("data_points", {}):
+        # Data points structure: {"data_points": {"laps": [...]}}
+        laps = segmented_data.get("data_points", {}).get("laps", [])
+    else:
+        print(f"[ActivityClassifier_tool] Warning: No laps found in expected structure")
+        return segmented_data
+    
+    # Check if laps already have segment information
+    if laps and len(laps) > 0 and "segment" in laps[0]:
+        print(f"[ActivityClassifier_tool] Laps already have segment information, skipping segmentation")
+        print(f"[ActivityClassifier_tool] Found {len(laps)} laps with existing segments")
+        
+        # If date is provided, store the already segmented data in the database
+        if date:
+            try:
+                print(f"[ActivityClassifier_tool] Storing pre-segmented data in database for date: {date}")
+                print(f"[ActivityClassifier_tool] Pre-segmented data structure: {segmented_data}")
+                
+                # Get the session for the specified date
+                results = chroma_service.collection.get(where={"date": date})
+                if not results['ids']:
+                    return {
+                        "status": "error",
+                        "message": f"No session found for date: {date}"
+                    }
+                
+                # Get the single session (there's only one per day)
+                session_id = results['ids'][0]
+                current_metadata = results['metadatas'][0]
+                
+                # Update the data_points with pre-segmented data
+                if 'data_points' in current_metadata:
+                    try:
+                        # Parse existing data_points if it's a JSON string
+                        existing_data_points = json.loads(current_metadata['data_points']) if isinstance(current_metadata['data_points'], str) else current_metadata['data_points']
+                        
+                        # Update the laps with segment information from segmented_data
+                        if 'laps' in segmented_data:
+                            existing_data_points['laps'] = segmented_data['laps']
+                            print(f"[ActivityClassifier_tool] Updated {len(segmented_data['laps'])} laps with existing segment information")
+                        elif 'data_points' in segmented_data and 'laps' in segmented_data['data_points']:
+                            existing_data_points['laps'] = segmented_data['data_points']['laps']
+                            print(f"[ActivityClassifier_tool] Updated {len(segmented_data['data_points']['laps'])} laps with existing segment information")
+                        else:
+                            print(f"[ActivityClassifier_tool] Warning: No 'laps' key found in segmented_data")
+                        
+                        # Store updated data_points
+                        current_metadata['data_points'] = json.dumps(existing_data_points)
+                    except (json.JSONDecodeError, KeyError) as e:
+                        print(f"Warning: Could not update existing data_points: {e}")
+                        # If parsing fails, create new data_points structure with segmented_data
+                        current_metadata['data_points'] = json.dumps(segmented_data)
+                else:
+                    # If no existing data_points, create new one with segmented_data
+                    current_metadata['data_points'] = json.dumps(segmented_data)
+                    print(f"[ActivityClassifier_tool] Created new data_points with pre-segmented data")
+                
+                # Update the session
+                chroma_service.collection.update(
+                    ids=[session_id],
+                    metadatas=[current_metadata]
+                )
+                
+                print(f"[ActivityClassifier_tool] Successfully stored pre-segmented data for {date}")
+                return {
+                    "status": "success",
+                    "message": f"Successfully stored pre-segmented activity data for {date}",
+                    "segments_count": len(laps),
+                    "segmented_data": segmented_data
+                }
+                
+            except Exception as e:
+                print(f"[ActivityClassifier_tool] Error storing pre-segmented data: {str(e)}")
+                return {
+                    "status": "error",
+                    "message": f"Error storing pre-segmented data: {str(e)}",
+                    "segmented_data": segmented_data
+                }
+        else:
+            # If no date provided, just return the pre-segmented data
+            return {
+                "status": "success",
+                "message": "Pre-segmented activity data processed successfully",
+                "segmented_data": segmented_data
+            }
+    
     print(f"[ActivityClassifier_tool] Found {len(laps)} laps")
     
     if not laps:
@@ -128,6 +222,79 @@ def segment_activity_by_pace(activity_data: Dict[str, Any]) -> Dict[str, Any]:
     cool_down_count = sum(1 for lap in laps if lap.get("segment") == "Cool down")
     
     print(f"[ActivityClassifier_tool] Segmentation complete: {warm_up_count}k warm up, {main_count}k main, {cool_down_count}k cool down")
+    print(f"[ActivityClassifier_tool] Segmented data: {segmented_data}")
     
-    return segmented_data
+    # If date is provided, store the segmented data in the database
+    if date:
+        try:
+            print(f"[ActivityClassifier_tool] Storing segmented data in database for date: {date}")
+            print(f"[ActivityClassifier_tool] Segmented data structure: {segmented_data}")
+            
+            # Get the session for the specified date
+            results = chroma_service.collection.get(where={"date": date})
+            if not results['ids']:
+                return {
+                    "status": "error",
+                    "message": f"No session found for date: {date}"
+                }
+            
+            # Get the single session (there's only one per day)
+            session_id = results['ids'][0]
+            current_metadata = results['metadatas'][0]
+            
+            # Update the data_points with segmented data
+            if 'data_points' in current_metadata:
+                try:
+                    # Parse existing data_points if it's a JSON string
+                    existing_data_points = json.loads(current_metadata['data_points']) if isinstance(current_metadata['data_points'], str) else current_metadata['data_points']
+                    
+                    # Update the laps with segment information from segmented_data
+                    if 'laps' in segmented_data:
+                        existing_data_points['laps'] = segmented_data['laps']
+                        print(f"[ActivityClassifier_tool] Updated {len(segmented_data['laps'])} laps with segment information")
+                    elif 'data_points' in segmented_data and 'laps' in segmented_data['data_points']:
+                        existing_data_points['laps'] = segmented_data['data_points']['laps']
+                        print(f"[ActivityClassifier_tool] Updated {len(segmented_data['data_points']['laps'])} laps with segment information")
+                    else:
+                        print(f"[ActivityClassifier_tool] Warning: No 'laps' key found in segmented_data")
+                    
+                    # Store updated data_points
+                    current_metadata['data_points'] = json.dumps(existing_data_points)
+                except (json.JSONDecodeError, KeyError) as e:
+                    print(f"Warning: Could not update existing data_points: {e}")
+                    # If parsing fails, create new data_points structure with segmented_data
+                    current_metadata['data_points'] = json.dumps(segmented_data)
+            else:
+                # If no existing data_points, create new one with segmented_data
+                current_metadata['data_points'] = json.dumps(segmented_data)
+                print(f"[ActivityClassifier_tool] Created new data_points with segmented_data")
+            
+            # Update the session
+            chroma_service.collection.update(
+                ids=[session_id],
+                metadatas=[current_metadata]
+            )
+            
+            print(f"[ActivityClassifier_tool] Successfully stored segmented data for {date}")
+            return {
+                "status": "success",
+                "message": f"Successfully segmented and stored activity data for {date}",
+                "segments_count": len(segmented_data.get('laps', [])),
+                "segmented_data": segmented_data
+            }
+            
+        except Exception as e:
+            print(f"[ActivityClassifier_tool] Error storing segmented data: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Error storing segmented data: {str(e)}",
+                "segmented_data": segmented_data
+            }
+    else:
+        # If no date provided, just return the segmented data
+        return {
+            "status": "success",
+            "message": "Activity segmented successfully",
+            "segmented_data": segmented_data
+        }
 

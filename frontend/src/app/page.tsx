@@ -126,8 +126,8 @@ export default function Home() {
           </div>
           <div className="side-containers">
             <WeeklyStats date={sharedDate} />
-            {/* SessionOverview: Shows compact session info, opens detailed popup on click or when analyser_agent finishes */}
-            <SessionOverview date={sharedDate} autoOpen={true} />
+            {/* SessionOverview: Shows compact session info, opens detailed popup on click */}
+            <SessionOverview date={sharedDate} />
             <div className="stat-card">
               <h1>Training plan</h1>
               <FileUpload websocket={websocket} />

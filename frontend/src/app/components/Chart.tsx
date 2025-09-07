@@ -109,6 +109,57 @@ export default function Chart({ date }: ChartProps) {
     return null;
   };
 
+  // Calculate segment statistics using existing segment data from agent
+  const segmentStats = laps.length > 0 ? (() => {
+    // Helper function to convert pace from m/s to min:sec/km format
+    const formatPace = (paceMs: number) => {
+      if (paceMs === 0) return '0:00/km';
+      const timeInSeconds = 1000 / paceMs;
+      const minutes = Math.floor(timeInSeconds / 60);
+      const seconds = Math.round(timeInSeconds % 60);
+      const formattedSeconds = seconds < 10 ? `0${seconds}` : seconds;
+      return `${minutes}:${formattedSeconds}/km`;
+    };
+    
+    // Group laps by their segment field, or use "Main" as default
+    const segmentGroups = new Map();
+    
+    laps.forEach(lap => {
+      const segmentName = lap.segment || 'Main';
+      const paceMs = lap.pace_ms || 0;
+      const heartRate = lap.heartrate_bpm || 0;
+      const distance = lap.distance_meters || 0;
+      
+      if (!segmentGroups.has(segmentName)) {
+        segmentGroups.set(segmentName, {
+          name: segmentName,
+          totalDistance: 0,
+          totalPaceMs: 0,
+          totalHeartRate: 0,
+          lapCount: 0,
+          startLap: lap.lap_index,
+          endLap: lap.lap_index
+        });
+      }
+      
+      const segment = segmentGroups.get(segmentName);
+      segment.totalDistance += distance;
+      segment.totalPaceMs += paceMs;
+      segment.totalHeartRate += heartRate;
+      segment.lapCount += 1;
+      segment.endLap = lap.lap_index;
+    });
+    
+    // Convert to array and calculate averages
+    return Array.from(segmentGroups.values()).map(segment => ({
+      ...segment,
+      avgPaceMs: segment.totalPaceMs / segment.lapCount,
+      avgHeartRate: Math.round(segment.totalHeartRate / segment.lapCount),
+      distanceKm: (segment.totalDistance / 1000).toFixed(1),
+      paceFormatted: formatPace(segment.totalPaceMs / segment.lapCount)
+    }));
+  })() : [];
+
   return (
     <div className="stat-card chart-card">
       <h1>Running Chart</h1>
@@ -167,7 +218,7 @@ export default function Chart({ date }: ChartProps) {
             />
             
             {/* The Bar series for pace data */}
-            <Bar yAxisId="left" dataKey="pace_ms" fill="#4e9cea" name="Pace (m/s)" shape={<CustomBar />} />
+            <Bar yAxisId="left" dataKey="pace_ms" fill="#4e9cea" name="Pace (min/km)" shape={<CustomBar />} />
             
             {/* The Line series for heart rate data, using the second Y-axis */}
             <Line yAxisId="right" type="monotone" dataKey="heartrate_bpm" stroke="#cc785c" name="Heartrate (BPM)" />
@@ -175,6 +226,22 @@ export default function Chart({ date }: ChartProps) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      
+      {/* Segments Display - Always visible when data is available, placed at bottom */}
+      {segmentStats.length > 0 && (
+        <div className="segments-section" style={{ marginTop: "20px" }}>
+          <div className="segments-grid">
+            {segmentStats.map((segment, index) => (
+              <div key={index} className="segment-item">
+                <div className="segment-name">{segment.name}</div>
+                <div className="segment-distance">{segment.distanceKm} km</div>
+                <div className="segment-pace">{segment.paceFormatted}</div>
+                <div className="segment-heartrate">{segment.avgHeartRate} BPM</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
