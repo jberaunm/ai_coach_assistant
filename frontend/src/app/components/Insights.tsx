@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useSessionData } from "../contexts/SessionDataContext";
 
 interface InsightsProps {
@@ -123,10 +123,62 @@ const parseInlineMarkdown = (text: string) => {
 };
 
 export default function Insights({ date }: InsightsProps) {
-  const { sessionData, loading, error } = useSessionData();
+  const { sessionData, loading, error, sendMessage } = useSessionData();
   
   // Extract coach_feedback from session metadata
   const coachFeedback = sessionData?.metadata?.coach_feedback;
+  
+  // State for RPE and feedback form
+  const [rpeValue, setRpeValue] = useState(5);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // RPE descriptions
+  const rpeDescriptions = {
+    0: "Very light effort like walking",
+    1: "Very light effort like walking", 
+    2: "Very light effort like walking",
+    3: "Light effort, comfortable pace where you can easily hold a conversation",
+    4: "Light effort, comfortable pace where you can easily hold a conversation",
+    5: "Moderate effort, breathing is heavier but you can still talk",
+    6: "Moderate effort, breathing is heavier but you can still talk",
+    7: "Hard effort, breathing is heavy and it's hard to talk",
+    8: "Hard effort, breathing is heavy and it's hard to talk",
+    9: "Maximum, all-out effort",
+    10: "Maximum, all-out effort"
+  };
+
+  // Handle form submission
+  const handleSubmit = async () => {
+    if (!feedbackText.trim()) {
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Format the date for the request
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Create the request message for analyser_agent Main Workflow 2
+      const requestMessage = `Insights for activity with ${dateStr}, RPE: ${rpeValue} and Feedback: ${feedbackText}`;
+      
+      console.log("Submitting to analyser_agent:", requestMessage);
+      
+      // Send the message via WebSocket
+      const success = sendMessage(requestMessage);
+      
+      if (success) {
+        // Clear the form after successful submission
+        setFeedbackText("");
+        setRpeValue(5);
+      }
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -150,33 +202,113 @@ export default function Insights({ date }: InsightsProps) {
     );
   }
 
-  if (!coachFeedback) {
+  // Check if we have segmented data
+  const hasSegmentedData = sessionData?.metadata?.data_points?.laps && sessionData.metadata.data_points.laps.length > 0;
+
+  // If we have coach feedback, show it; otherwise show the RPE form
+  if (coachFeedback) {
+    const parsedFeedback = parseMarkdown(coachFeedback);
+
     return (
       <div className="stat-card insights-card">
         <h1>Insights</h1>
-        <div style={{ 
-          textAlign: "center", 
-          padding: "20px", 
-          color: "#666",
-          fontStyle: "italic"
-        }}>
-          No insights available yet. Complete a training session to get personalized feedback and analysis.
+        <div className="insights-content">
+          <div 
+            className="coach-feedback"
+            dangerouslySetInnerHTML={{ __html: parsedFeedback }}
+          />
         </div>
       </div>
     );
   }
 
-  const parsedFeedback = parseMarkdown(coachFeedback);
-
+  // Show RPE form when no coach feedback
   return (
     <div className="stat-card insights-card">
       <h1>Insights</h1>
-      <div className="insights-content">
-        <div 
-          className="coach-feedback"
-          dangerouslySetInnerHTML={{ __html: parsedFeedback }}
-        />
+      <div style={{ padding: "2px" }}>
+        {hasSegmentedData ? (
+          <div>
+            {/* RPE and Feedback Form */}
+            <div>
+              <h3>Rate Your Perceived Effort (RPE)</h3>
+                
+                {/* RPE Slider */}
+                <div style={{ marginBottom: "15px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <span style={{ fontSize: "12px", color: "#666" }}>0</span>
+                    <span style={{ fontSize: "14px", fontWeight: "bold" }}>RPE: {rpeValue}</span>
+                    <span style={{ fontSize: "12px", color: "#666" }}>10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={rpeValue}
+                    onChange={(e) => setRpeValue(parseInt(e.target.value))}
+                    style={{
+                      width: "100%",
+                      height: "6px",
+                      borderRadius: "3px",
+                      background: `linear-gradient(to right, #4caf50 0%, #4caf50 ${rpeValue * 10}%, #ddd ${rpeValue * 10}%, #ddd 100%)`,
+                      outline: "none",
+                      cursor: "pointer"
+                    }}
+                  />
+                  <p style={{ fontSize: "12px", color: "#666", marginTop: "5px", textAlign: "center" }}>
+                    {rpeDescriptions[rpeValue as keyof typeof rpeDescriptions]}
+                  </p>
+                </div>
+
+                {/* Feedback Text Area */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", fontWeight: "500" }}>
+                    How did your session feel?
+                  </label>
+                  <textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="Tell us about your energy levels, any challenges you faced, what went well, and your overall experience..."
+                    style={{
+                      width: "100%",
+                      minHeight: "80px",
+                      padding: "10px",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                      fontSize: "14px",
+                      resize: "vertical",
+                      fontFamily: "inherit"
+                    }}
+                  />
+                </div>
+
+                {/* Send Button */}
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !feedbackText.trim()}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    backgroundColor: isSubmitting || !feedbackText.trim() ? "#ccc" : "#2196f3",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    cursor: isSubmitting || !feedbackText.trim() ? "not-allowed" : "pointer",
+                    transition: "background-color 0.2s"
+                  }}
+                >
+                  {isSubmitting ? "Sending..." : "Send Feedback"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", color: "#666", fontStyle: "italic" }}>
+              <p>No insights available yet. Complete a training session to get personalized feedback and analysis.</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }

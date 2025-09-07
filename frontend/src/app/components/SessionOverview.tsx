@@ -5,80 +5,48 @@ import { useSessionData } from "../contexts/SessionDataContext";
 
 interface SessionOverviewProps {
   date: Date;
-  autoOpen?: boolean;
 }
 
-export default function SessionOverview({ date, autoOpen = false }: SessionOverviewProps) {
-  const { sessionData, loading, error } = useSessionData();
+export default function SessionOverview({ date }: SessionOverviewProps) {
+  const { sessionData, loading, error, justCompletedSegmentation, resetSegmentationFlag } = useSessionData();
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   
-  // Refs to track state and prevent unwanted auto-opens
-  const hasProcessedInitialData = useRef(false);  // Prevents auto-open on initial page load
-  const lastCoachFeedback = useRef<string | undefined>(undefined);  // Tracks if coach feedback is new
+  // Refs to track state
   const lastProcessedDate = useRef<string>('');  // Tracks which date we've already processed
-  const initialDataLoaded = useRef(false);  // Tracks if we've loaded initial data for this date
+  const hasProcessedSegmentation = useRef<boolean>(false);  // Tracks if we've processed segmentation for this date
 
-  // Reset the processed flag when date changes
+  // Reset popup state when date changes
   useEffect(() => {
     const currentDateStr = date.toISOString().split('T')[0];
     
     // Only reset if we're actually changing to a different date
     if (lastProcessedDate.current !== currentDateStr) {
-      hasProcessedInitialData.current = false;
-      lastCoachFeedback.current = undefined;
       lastProcessedDate.current = currentDateStr;
-      initialDataLoaded.current = false;
+      hasProcessedSegmentation.current = false;
       setIsPopupOpen(false);
+      // Reset the segmentation flag when date changes to prevent auto-popup on navigation
+      resetSegmentationFlag();
     }
-  }, [date]);
+  }, [date, resetSegmentationFlag]);
 
-  // Track when initial data is loaded for this date
-  // This helps distinguish between "data that was already there" and "new data from analyser_agent"
+  // Auto-popup only when segmentation workflow just completed (not when navigating to existing data)
   useEffect(() => {
-    if (sessionData && !initialDataLoaded.current) {
-      initialDataLoaded.current = true;
-      // Store the initial coach feedback to compare later
-      if (sessionData.metadata?.coach_feedback) {
-        lastCoachFeedback.current = sessionData.metadata.coach_feedback;
+    if (sessionData && !loading && !error && justCompletedSegmentation) {
+      const hasSegmentedData = sessionData.metadata?.data_points?.laps && sessionData.metadata.data_points.laps.length > 0;
+      const currentDateStr = date.toISOString().split('T')[0];
+      
+      // Only auto-popup if:
+      // 1. We have segmented data
+      // 2. We haven't already processed segmentation for this date
+      // 3. The segmentation just completed (justCompletedSegmentation flag is true)
+      // 4. We're on the same date that was just processed
+      if (hasSegmentedData && !hasProcessedSegmentation.current && lastProcessedDate.current === currentDateStr) {
+        console.log('🔄 Auto-popup: Segmentation just completed, opening popup');
+        hasProcessedSegmentation.current = true;
+        setIsPopupOpen(true);
       }
     }
-  }, [sessionData]);
-
-  // Auto-open popup when analyser_agent finishes processing
-  // This will NOT trigger for dates that already have complete data when you navigate to them
-  useEffect(() => {
-    // Only auto-open if:
-    // 1. autoOpen is true
-    // 2. We have coach feedback (indicating analyser_agent finished)
-    // 3. We haven't already opened the popup
-    // 4. Initial data has been loaded (so we can compare)
-    // 5. We have both coach feedback AND session data (indicating complete analysis)
-    // 6. The coach feedback is actually new (not from initial load)
-    if (autoOpen && 
-        sessionData?.metadata?.coach_feedback && 
-        !isPopupOpen && 
-        !hasProcessedInitialData.current &&
-        initialDataLoaded.current) {
-      
-      // Check if this is new coach feedback (not from initial page load)
-      const currentFeedback = sessionData.metadata.coach_feedback;
-      const isNewFeedback = lastCoachFeedback.current !== currentFeedback;
-      
-      // Check if we have both coach feedback AND session data
-      // This indicates the analyser_agent has actually finished processing
-      const hasInitialData = sessionData?.metadata?.data_points?.laps && sessionData.metadata.data_points.laps.length > 0;
-      
-      if (hasInitialData && isNewFeedback) {
-        // Mark that we've processed the initial data
-        hasProcessedInitialData.current = true;
-        lastCoachFeedback.current = currentFeedback;
-        // Add a small delay to ensure the UI is ready
-        setTimeout(() => {
-          setIsPopupOpen(true);
-        }, 500);
-      }
-    }
-  }, [autoOpen, sessionData?.metadata?.coach_feedback, sessionData?.metadata?.data_points?.laps, isPopupOpen]);
+  }, [sessionData, loading, error, date, justCompletedSegmentation]);
 
   const handleCardClick = () => {
     setIsPopupOpen(true);

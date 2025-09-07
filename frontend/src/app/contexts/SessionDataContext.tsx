@@ -77,6 +77,9 @@ interface SessionDataContextType {
   refetch: () => void;
   forceSchedule: () => void;
   scheduling: boolean;
+  justCompletedSegmentation: boolean;
+  resetSegmentationFlag: () => void;
+  sendMessage: (message: string) => boolean;
 }
 
 const SessionDataContext = createContext<SessionDataContextType | undefined>(undefined);
@@ -89,12 +92,43 @@ interface SessionDataProviderProps {
 
 export function SessionDataProvider({ children, date, websocket }: SessionDataProviderProps) {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  
+  // Log sessionData changes
+  useEffect(() => {
+    console.log('🔄 sessionData state changed:', sessionData);
+    if (sessionData) {
+      console.log('🔄 Coach feedback available:', !!sessionData.metadata?.coach_feedback);
+      console.log('🔄 Data points available:', !!sessionData.metadata?.data_points?.laps);
+    }
+  }, [sessionData]);
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const lastScheduledDate = useRef<string>('');
   const pendingSchedulingDate = useRef<string>('');
+  const [justCompletedSegmentation, setJustCompletedSegmentation] = useState(false);
+  
+  const resetSegmentationFlag = () => {
+    setJustCompletedSegmentation(false);
+  };
+
+  const sendMessage = (message: string) => {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not available for sending message');
+      return false;
+    }
+
+    const messageObj = {
+      mime_type: "text/plain",
+      data: message,
+      role: "user"
+    };
+    
+    websocket.send(JSON.stringify(messageObj));
+    console.log('Message sent via WebSocket:', message);
+    return true;
+  };
 
   const getMondayOfWeek = (date: Date) => {
     const day = date.getDay();
@@ -103,16 +137,21 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
   };
 
   const fetchSessionData = async (specificDate?: string) => {
+    console.log('🔄 fetchSessionData called with date:', specificDate || date.toISOString().split('T')[0]);
     setLoading(true);
     setError(null);
     
     try {
       // Use specificDate if provided (for post-scheduling fetch), otherwise use current date prop
       const formattedDate = specificDate || date.toISOString().split('T')[0];
+      console.log('🔄 Fetching data for date:', formattedDate);
       const response = await fetch(`http://localhost:8000/api/session/${formattedDate}`);
       
       if (response.ok) {
         const data = await response.json();
+        console.log('🔄 Session data fetched:', data);
+        console.log('🔄 Coach feedback:', data.metadata?.coach_feedback);
+        console.log('🔄 Data points laps:', data.metadata?.data_points?.laps?.length);
         
         // Sort calendar events by start time if they exist
         if (data.metadata?.calendar?.events) {
@@ -125,7 +164,15 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
         }
         
         setSessionData(data);
+        console.log('🔄 Session data updated in state');
+        
+        // Reset the segmentation flag after data is updated
+        if (justCompletedSegmentation) {
+          console.log('🔄 Resetting segmentation completion flag');
+          setJustCompletedSegmentation(false);
+        }
       } else {
+        console.log('❌ Failed to fetch session data:', response.status);
         setError('No session found for this date');
         setSessionData(null);
       }
@@ -199,13 +246,75 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
     }
   };
 
-  // Listen for WebSocket messages to detect when scheduling is complete
+  // Listen for WebSocket messages to detect when agents finish processing
   useEffect(() => {
     if (!websocket) return;
 
     const handleMessage = (event: MessageEvent) => {
+      const messageText = event.data;
+      console.log('WebSocket message received:', messageText);
+      console.log('Message type:', typeof messageText);
+      console.log('Message length:', messageText.length);
+      
+      // First check for analyser_agent completion messages (both JSON and text)
+      if (typeof messageText === 'string' && messageText.includes('[ANALYSER_AGENT] FINISH:')) {
+        console.log('✅ ANALYSER_AGENT message detected:', messageText);
+        if (messageText.includes('Segmentation') || messageText.includes('Insights') || messageText.includes('Analysis of activity') || messageText.includes('Segmentation Only') || messageText.includes('Successfully completed')) {
+          console.log('✅ Analyser agent completed, refreshing session data');
+          // Set flag to indicate segmentation just completed
+          setJustCompletedSegmentation(true);
+          // Refresh session data to get the latest segmented data or insights
+          const currentDate = date.toISOString().split('T')[0];
+          fetchSessionData(currentDate);
+        } else {
+          console.log('❌ Message contains ANALYSER_AGENT but not completion keywords');
+        }
+        return; // Don't process as JSON if it's an analyser_agent message
+      } else {
+        console.log('❌ Not an ANALYSER_AGENT message or not a string');
+      }
+      
+      // Catch-all detection for any message containing the completion pattern
+      if (typeof messageText === 'string' && messageText.includes('Segmentation Only Successfully completed')) {
+        console.log('✅ Catch-all detection: Segmentation Only Successfully completed found');
+        console.log('✅ Analyser agent completed, refreshing session data');
+        const currentDate = date.toISOString().split('T')[0];
+        fetchSessionData(currentDate);
+        return;
+      }
+      
       try {
         const data = JSON.parse(event.data);
+        
+        // Check for analyser_agent completion in JSON messages (log_message format)
+        if (data.log_message && typeof data.log_message === 'string' && data.log_message.includes('[ANALYSER_AGENT] FINISH:')) {
+          console.log('✅ ANALYSER_AGENT message detected in JSON log_message:', data.log_message);
+          if (data.log_message.includes('Segmentation') || data.log_message.includes('Insights') || data.log_message.includes('Analysis of activity') || data.log_message.includes('Segmentation Only') || data.log_message.includes('Successfully completed')) {
+            console.log('✅ Analyser agent completed, refreshing session data');
+            // Set flag to indicate segmentation just completed
+            setJustCompletedSegmentation(true);
+            // Refresh session data to get the latest segmented data or insights
+            const currentDate = date.toISOString().split('T')[0];
+            fetchSessionData(currentDate);
+          } else {
+            console.log('❌ JSON log_message contains ANALYSER_AGENT but not completion keywords');
+          }
+        }
+        
+        // Also check for content field (fallback)
+        if (data.content && typeof data.content === 'string' && data.content.includes('[ANALYSER_AGENT] FINISH:')) {
+          console.log('✅ ANALYSER_AGENT message detected in JSON content:', data.content);
+          if (data.content.includes('Segmentation') || data.content.includes('Insights') || data.content.includes('Analysis of activity') || data.content.includes('Segmentation Only') || data.content.includes('Successfully completed')) {
+            console.log('✅ Analyser agent completed, refreshing session data');
+            // Set flag to indicate segmentation just completed
+            setJustCompletedSegmentation(true);
+            // Refresh session data to get the latest segmented data or insights
+            const currentDate = date.toISOString().split('T')[0];
+            fetchSessionData(currentDate);
+          } else {
+            console.log('❌ JSON content contains ANALYSER_AGENT but not completion keywords');
+          }
+        }
         
         // Check if this is a turn_complete message (agent finished processing)
         if (data.turn_complete === true && pendingSchedulingDate.current) {
@@ -227,6 +336,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
         }
       } catch (err) {
         // Ignore parsing errors for non-JSON messages
+        console.log('Non-JSON message received:', messageText);
       }
     };
 
@@ -235,7 +345,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
     return () => {
       websocket.removeEventListener('message', handleMessage);
     };
-  }, [websocket]);
+  }, [websocket, date]);
 
   useEffect(() => {
     const formattedDate = date.toISOString().split('T')[0];
@@ -268,7 +378,10 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
       error, 
       refetch, 
       forceSchedule,
-      scheduling 
+      scheduling,
+      justCompletedSegmentation,
+      resetSegmentationFlag,
+      sendMessage
     }}>
       {children}
     </SessionDataContext.Provider>

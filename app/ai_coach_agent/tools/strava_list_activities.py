@@ -257,7 +257,8 @@ def get_activity_with_laps(start_date: str) -> dict:
             }
             activity_data["data_points"].append(data_point)
 
-        print(f"Successfully processed {total_data_points} lap data points for activity {activity_id}")
+        print(f"[StravaAPI_tool] Successfully processed {total_data_points} lap data points for activity {activity_id}")
+        print(f"[StravaAPI_tool] Data processed: {activity_data}")
         return {
             "status": "success",
             "message": f"Retrieved complete lap data for activity {activity_id}",
