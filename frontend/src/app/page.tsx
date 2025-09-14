@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import ChatAssistant from "./components/ChatAssistant";
 import TrainingPlan from "./components/TrainingPlan";
+import ResearchUpload from "./components/ResearchUpload";
 import DayOverviewCard from "./components/DayOverviewCard";
 import EventsCalendar from "./components/EventsCalendar";
 import WeatherForecast from "./components/WeatherForecast";
@@ -149,6 +150,10 @@ export default function Home() {
           <div className="stat-card agent-flow-card">
             <h1 style={{ marginBottom: 12 }}>AI Agent Flow</h1>
             <AgentFlowDiagramReactFlow websocket={websocket} />
+          </div>
+          <div className="stat-card">
+            <h1 style={{ marginBottom: 12 }}>Research Knowledge Base</h1>
+            <ResearchUpload websocket={websocket} />
           </div>
         </div>
       </div>

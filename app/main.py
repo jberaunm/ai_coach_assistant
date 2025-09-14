@@ -46,6 +46,7 @@ class PrintInterceptor:
             '[ANALYSER_AGENT]',
             '[NUMERICAL_ANALYSER_AGENT]',
             '[VISUAL_ANALYSER_AGENT]',
+            '[RAG_AGENT]',
             '[FileReader_tool]',
             '[CalendarAPI_tool_create_event]',
             '[CalendarAPI_tool_list_events]',
@@ -354,6 +355,55 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
             "message": str(e)
         }
 
+@app.post("/upload-research")
+async def upload_research_file(file: UploadFile = File(...), session_id: str = Query(...)):
+    try:        
+        # Create a safe filename
+        safe_filename = file.filename.replace(" ", "_").replace("\\", "_").replace("/", "_")
+        file_path = UPLOAD_DIR / safe_filename
+        
+        # Save the file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        print(f"Research file saved successfully at: {file_path}")
+        
+        # Send a message through WebSocket for RAG processing
+        if session_id in websocket_connections:
+            
+            # Create a message to send to the agent for RAG processing
+            normalized_path = str(file_path).replace('\\', '/')  # Normalize path separators
+            message = {
+                "mime_type": "text/plain",
+                "data": f"RAG Document Processing: {normalized_path}",
+                "role": "user"
+            }
+            
+            # Get the live_request_queue for this session
+            websocket = websocket_connections[session_id]
+            if hasattr(websocket, 'live_request_queue'):
+                # Send the message through the live_request_queue
+                content = types.Content(role="user", parts=[types.Part.from_text(text=message["data"])])
+                websocket.live_request_queue.send_content(content=content)
+            else:
+                print(f"No live_request_queue found for session {session_id}")
+            print(f"[FRONTEND TO AGENT] RAG Document Processing: {normalized_path}")
+        else:
+            print(f"No WebSocket connection found for session {session_id}")
+        
+        return {
+            "status": "success",
+            "message": "Research file uploaded and processing started",
+            "filename": safe_filename
+        }
+    except Exception as e:
+        print(f"Error in upload_research_file: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -517,3 +567,117 @@ async def analyze_chart_endpoint(image_path: str = Query(...), session_id: str =
     except Exception as e:
         print(f"Error in analyze_chart_endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error analyzing chart: {str(e)}")
+
+@app.get("/api/rag-knowledge")
+async def get_rag_knowledge(query: str = Query("", description="Search query for RAG knowledge"), 
+                           category: str = Query(None, description="Filter by category"), 
+                           limit: int = Query(10, description="Number of results to return")):
+    """Retrieve RAG knowledge chunks from the knowledge base."""
+    try:
+        from ai_coach_agent.tools.rag_knowledge import retrieve_rag_knowledge
+        
+        if not query:
+            # If no query provided, get all chunks
+            from ai_coach_agent.tools.rag_knowledge import get_all_rag_categories
+            from db.chroma_service import chroma_service
+            
+            rag_collection = chroma_service.client.get_collection("rag_knowledge")
+            results = rag_collection.get()
+            
+            chunks = []
+            if results['ids']:
+                for i in range(len(results['ids'])):
+                    chunk = {
+                        'id': results['ids'][i],
+                        'content': results['documents'][i],
+                        'metadata': results['metadatas'][i]
+                    }
+                    chunks.append(chunk)
+            
+            return {
+                "status": "success",
+                "chunks": chunks,
+                "total_count": len(chunks),
+                "message": f"Retrieved all {len(chunks)} knowledge chunks"
+            }
+        else:
+            # Search with query
+            result = retrieve_rag_knowledge(query, n_results=limit, category=category)
+            return result
+            
+    except Exception as e:
+        print(f"Error in get_rag_knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RAG knowledge: {str(e)}")
+
+@app.get("/api/rag-categories")
+async def get_rag_categories():
+    """Get all available categories in the RAG knowledge base."""
+    try:
+        from ai_coach_agent.tools.rag_knowledge import get_all_rag_categories
+        result = get_all_rag_categories()
+        return result
+    except Exception as e:
+        print(f"Error in get_rag_categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RAG categories: {str(e)}")
+
+@app.get("/api/rag-stats")
+async def get_rag_stats():
+    """Get statistics about the RAG knowledge base with detailed source information."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        rag_collection = chroma_service.client.get_collection("rag_knowledge")
+        results = rag_collection.get()
+        
+        # Count chunks by category
+        category_counts = {}
+        if results['metadatas']:
+            for metadata in results['metadatas']:
+                category = metadata.get('category', 'Unknown')
+                category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Group chunks by source and extract detailed metadata
+        sources_info = {}
+        if results['metadatas']:
+            for i, metadata in enumerate(results['metadatas']):
+                source = metadata.get('source', 'Unknown')
+                document_id = metadata.get('document_id', 'unknown')
+                
+                if source not in sources_info:
+                    sources_info[source] = {
+                        "source": source,
+                        "document_id": document_id,
+                        "document_title": metadata.get('document_title', 'Unknown'),
+                        "document_year": metadata.get('document_year', 'Unknown'),
+                        "authors": metadata.get('authors', 'Unknown'),
+                        "journal": metadata.get('journal', 'Unknown'),
+                        "category": metadata.get('category', 'Unknown'),
+                        "chunk_count": 0,
+                        "chunks": []
+                    }
+                
+                # Add chunk information
+                chunk_info = {
+                    "chunk_id": metadata.get('chunk_id', 'unknown'),
+                    "title": metadata.get('title', 'Untitled'),
+                    "content_preview": results['documents'][i][:200] + "..." if len(results['documents'][i]) > 200 else results['documents'][i]
+                }
+                sources_info[source]["chunks"].append(chunk_info)
+                sources_info[source]["chunk_count"] += 1
+        
+        # Convert to list and sort by chunk count (descending)
+        sources_list = list(sources_info.values())
+        sources_list.sort(key=lambda x: x["chunk_count"], reverse=True)
+        
+        return {
+            "status": "success",
+            "total_chunks": len(results['ids']) if results['ids'] else 0,
+            "categories": category_counts,
+            "unique_sources": len(sources_list),
+            "sources": sources_list,
+            "message": f"RAG knowledge base contains {len(results['ids']) if results['ids'] else 0} chunks across {len(category_counts)} categories from {len(sources_list)} sources"
+        }
+        
+    except Exception as e:
+        print(f"Error in get_rag_stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RAG stats: {str(e)}")

@@ -44,13 +44,14 @@ from .tools import (
     agent_log,
     initialize_rag_knowledge,
     retrieve_rag_knowledge,
-    get_all_rag_categories
+    get_all_rag_categories,
+    create_rag_chunks
 )
 
-planner_agent = LlmAgent(
+planner_agent = Agent(
     name="planner_agent",
-    #model="gemini-2.0-flash-exp",
-    model=LiteLlm(model="mistral/mistral-small-latest"),
+    model="gemini-2.5-flash",
+    #model=LiteLlm(model="mistral/mistral-small-latest"),
     description=(
         "Agent that parses uploaded training plans and creates personalized training plans based on user goals, fitness level, and preferences."
     ),
@@ -135,13 +136,36 @@ planner_agent = LlmAgent(
     - **Training Load**: Calculate appropriate weekly volume progression
     - **Session Types**: Determine the right mix of easy runs, tempo runs, intervals, and long runs
 
-    ### Step 3: Create Personalized Plan
+    ### Step 3: Retrieve RAG Knowledge (Optional)
+    **CRITICAL**: The RAG knowledge base may not exist if the user hasn't uploaded research documents yet.
+    
+    **RAG Knowledge Integration**:
+    - Use `retrieve_rag_knowledge` to get research-based insights for training plan creation
+    - Query for knowledge related to the specific goal (e.g., "5k training", "marathon preparation", "periodization")
+    - Query for general training principles and best practices
+    - Query for common training mistakes to avoid
+    - **If RAG knowledge is available**: Incorporate evidence-based research findings into the training plan
+    - **If RAG knowledge is not available**: Proceed with standard training principles and best practices
+    
+    **RAG Query Examples**:
+    - For 5K training: `retrieve_rag_knowledge("5k training periodization speed work")`
+    - For Marathon training: `retrieve_rag_knowledge("marathon training long runs tapering")`
+    - For general principles: `retrieve_rag_knowledge("training principles progression recovery")`
+    - For common mistakes: `retrieve_rag_knowledge("training mistakes overtraining injury prevention")`
+    
+    **RAG Knowledge Handling**:
+    - **If RAG knowledge is retrieved**: Incorporate specific research findings, cite relevant studies, and provide evidence-based recommendations
+    - **If RAG knowledge is empty or unavailable**: Proceed with standard training principles and mention that research-based insights can be added by uploading relevant documents to the RAG knowledge base
+    - **Always check the status field**: If status is "error" or chunks array is empty, treat as no RAG knowledge available
+
+    ### Step 4: Create Personalized Plan
     Generate a detailed training plan that includes:
     - **Weekly Structure**: 3-6 sessions per week based on fitness level and goal
     - **Progressive Overload**: Gradual increase in volume and intensity
     - **Recovery**: Adequate rest days and easy weeks
     - **Specific Workouts**: Detailed session descriptions with paces, distances, and instructions
     - **Race Preparation**: Tapering strategy if race date is provided
+    - **Research-Based Insights**: Incorporate findings from RAG knowledge when available
     
     **TRAINING PLAN STRUCTURE**:
     - **Phase 1 (Weeks 1-4)**: Base building - focus on easy runs and building aerobic fitness
@@ -152,7 +176,7 @@ planner_agent = LlmAgent(
     - **Final Week**: Race week - minimal training, focus on rest and preparation
     - **Race Day**: The final session is the actual race itself
 
-    ### Step 4: Calculate Training Plan Duration and Dates
+    ### Step 5: Calculate Training Plan Duration and Dates
     **CRITICAL DATE CALCULATIONS**:
     - **Start Date**: Always start the training plan from TOMORROW (today + 1 day)
       - Use the current date provided in the context: "Today's date is {get_current_time()}"
@@ -175,7 +199,7 @@ planner_agent = LlmAgent(
     
     **DATE FORMAT**: Always use YYYY-MM-DD format for all dates in the training plan
 
-    ### Step 5: Store in ChromaDB
+    ### Step 6: Store in ChromaDB
     Use the tool `write_chromaDB` to store the generated training plan sessions with proper dates, starting from TOMORROW and ending on the RACE DATE.
     
     **RACE DAY SESSION**: Include the actual race as the final session in the training plan:
@@ -184,7 +208,7 @@ planner_agent = LlmAgent(
     - **Distance**: Full race distance (e.g., 42.2km for marathon, 21.1km for half-marathon)
     - **Notes**: "Race day - [goal] - Execute your race strategy and enjoy the experience!"
 
-    ### Step 6: Log Finish and Respond
+    ### Step 7: Log Finish and Respond
     Call `agent_log("planner_agent", "finish", "Successfully completed personalized plan creation")`
     
     Respond with a comprehensive training plan that includes:
@@ -192,8 +216,9 @@ planner_agent = LlmAgent(
     2. **Training Phases**: Breakdown of the different phases with specific week ranges
     3. **Weekly Structure**: Sample weeks showing progression with actual dates
     4. **Key Workouts**: Important sessions with specific instructions and target paces
-    5. **Training Tips**: Personalized advice based on their inputs
+    5. **Training Tips**: Personalized advice based on their inputs and RAG knowledge (when available)
     6. **Progression Strategy**: How to advance the plan over time
+    7. **Research-Based Insights**: Include evidence-based recommendations from RAG knowledge when available
     
     **RESPONSE FORMAT EXAMPLE**:
     "I've created a personalized [goal] training plan for you:
@@ -221,7 +246,7 @@ planner_agent = LlmAgent(
     3. The path should point to a file in the uploads directory
     4. If you cannot read the file, report the specific error and ask the user to try uploading again
     """,
-    tools=[file_reader, write_chromaDB, agent_log],
+    tools=[file_reader, write_chromaDB, retrieve_rag_knowledge, agent_log],
 )
 
 scheduler_agent = LlmAgent(
@@ -706,6 +731,185 @@ analyser_agent = LlmAgent(
            agent_log],
 )
 
+rag_agent = Agent(
+    name="rag_agent",
+    #model=LiteLlm(model="mistral/mistral-small-latest", api_key=api_key),
+    model="gemini-2.5-pro",
+    description=(
+        "Agent that analyzes research documents and creates RAG knowledge chunks for training plans and session analysis. Determines document relevance and extracts structured information."
+    ),
+    instruction=f"""
+    You are a RAG (Retrieval Augmented Generation) agent specialized in processing research documents for running training and analysis.
+    
+    ## CRITICAL: Why RAG Chunks Matter
+    **RAG chunks are the foundation of enhanced AI capabilities**. They enable:
+    
+    **For planner_agent**:
+    - Evidence-based training plan creation using research findings
+    - Access to latest training methodologies and periodization strategies
+    - Personalized recommendations based on scientific research
+    - Integration of best practices from multiple research sources
+    
+    **For analyser_agent**:
+    - Research-grounded session analysis and feedback
+    - Scientific explanations for performance patterns
+    - Evidence-based recommendations for improvement
+    - Access to biomechanical and physiological insights
+    
+    **MORE CHUNKS = BETTER AI PERFORMANCE**: Each chunk represents a specific piece of knowledge that can be retrieved and used to enhance responses. More chunks mean more comprehensive knowledge coverage.
+    
+    ## Main Workflow: RAG Document Processing: [file_path]
+    **CRITICAL**: Process research documents to create RAG knowledge chunks for enhanced AI responses.
+    
+    ### Step 1: Log Start
+    Call `agent_log("rag_agent", "start", "Starting document analysis")`
+    
+    ### Step 2: Read and Analyze Document
+    You will receive a message like "RAG Document Processing: app/uploads/rag_test.pdf". 
+    
+    **File Path Extraction**: Extract the file path from the message. The message format is:
+    "RAG Document Processing: [file_path]"
+    
+    Use the `file_reader` tool with the extracted file path to read the document content, then analyze it to:
+    - Identify the document type (research paper, training guide, case study, etc.)
+    - Determine the main topic and key themes
+    - Extract and store the following metadata:
+      - **Title**: Document title (look for headers, title pages, or prominent text at the beginning)
+      - **Year**: Publication year (look for copyright ©, "Published in", "Year:", or year in citations)
+      
+      **EXTRACTION EXAMPLES**:
+      - Title: "ChatGPT-generated training plans for runners are not Rated optimal"
+      - Year: "2024" or "2023"
+    
+    ### Step 3: Categorize Document
+    **CRITICAL**: Determine which category the document belongs to:
+    - **Training_Plan**: Documents about training methodologies, periodization, workout design, training principles, program structure
+    - **Session_Analysis**: Documents about performance analysis, biomechanics, physiology, technique, recovery, nutrition, psychology
+    
+    **TRAINING PLAN INDICATORS**:
+    - Training periodization, phases, cycles
+    - Workout design, exercise selection
+    - Training load, volume, intensity
+    - Program structure, progression
+    - Training principles, methodology
+    - Long-term planning, season planning
+    
+    **SESSION ANALYSIS INDICATORS**:
+    - Performance metrics, data analysis
+    - Biomechanics, running technique
+    - Physiology, energy systems
+    - Recovery, adaptation
+    - Nutrition, hydration
+    - Psychology, motivation
+    - Injury prevention, rehabilitation
+    
+    **CATEGORY PURPOSE**:
+    - **Training_Plan**: RAG chunks are intended for the planner_agent to create better personalized training plans
+    - **Session_Analysis**: RAG chunks are intended for the analyser_agent to perform better analysis of each running session
+    
+    ### Step 4: Create Comprehensive Knowledge Chunks
+    **CRITICAL CHUNKING STRATEGY**: Focus on creating meaningful, actionable chunks that will enhance AI capabilities.
+    
+    **Chunking Guidelines**:
+    - **Size**: 200-500 words per chunk (not too small, not too large)
+    - **Self-contained**: Each chunk should make sense on its own
+    - **Focused topics**: One main concept per chunk
+    - **Actionable content**: Include practical applications and recommendations
+    - **Quality over quantity**: Create as many chunks as needed to capture all valuable content
+    
+    **FOCUS ON VALUABLE SECTIONS ONLY**:
+    - **Results** → Main findings, data, statistics, key discoveries
+    - **Discussion** → Implications, limitations, future work, insights
+    - **Conclusion** → Key takeaways, recommendations, practical advice
+    - **Practical Applications** → How to apply findings in real training scenarios
+    
+    **CHUNK CREATION GUIDANCE**:
+    - **For Training_Plan category**: Focus on content that helps create personalized training plans (periodization, progression, personalization principles)
+    - **For Session_Analysis category**: Focus on content that helps analyze running sessions (performance metrics, technique analysis, recovery insights)
+    
+    **SKIP THESE SECTIONS** (not valuable for RAG knowledge base):
+    - Abstract/Introduction (too general)
+    - Literature Review (background information)
+    - Methodology (study design details)
+    - References (not valuable for RAG knowledge base)
+    
+    **Chunk Quality Requirements**:
+    - Each chunk must contain specific, actionable information
+    - Include relevant statistics, findings, or recommendations
+    - Create descriptive titles that clearly identify the content
+    - Ensure chunks can be retrieved independently for specific queries
+    - Focus on practical applications and actionable insights
+    
+    Use the tool `create_rag_chunks` with the document content you've analyzed to:
+    - Break the document into meaningful chunks following the strategy above
+    - Extract key insights, findings, and actionable information
+    - Create chunk titles that clearly describe the content
+    - Assign appropriate categories and subcategories
+    - **CRITICAL**: Pass the extracted metadata to the tool using the `metadata` parameter:
+      ```python
+      create_rag_chunks(
+          content=document_content,
+          metadata={{
+              "title": "extracted_document_title",
+              "author": "extracted_authors",
+              "year": "extracted_year",
+              "journal": "extracted_journal"
+          }},
+          file_info={{
+              "doc_id": "unique_document_id",
+              "file_name": "original_filename",
+              "uploaded_at": "current_timestamp"
+          }},
+          category="Training_Plan_or_Session_Analysis"
+      )
+      ```
+    
+    ### Step 5: Store in RAG Knowledge Base
+    The chunks will be automatically stored in the RAG knowledge base and can be retrieved by:
+    - planner_agent for training plan creation
+    - analyser_agent for session analysis and feedback
+    
+    ### Step 6: Log Finish and Respond
+    Call `agent_log("rag_agent", "finish", "Successfully completed document analysis and chunking")`
+    
+    Respond with:
+    1. **Document Summary**: Title, authors, year, category
+    2. **Analysis Results**: Main topics, key findings, relevance
+    3. **Chunking Results**: Number of chunks created, categories covered
+    4. **Integration Status**: How the knowledge will enhance training plans and analysis
+    
+    **RESPONSE FORMAT EXAMPLE**:
+    "I've analyzed the research document and created [X] knowledge chunks:
+    
+    **Document**: [Title] by [Authors] ([Year])
+    **Category**: [Training Plan/Session Analysis]
+    **Key Topics**: [Main themes and findings]
+    
+    **Chunks Created**:
+    - [X] chunks for training plan enhancement
+    - [Y] chunks for session analysis enhancement
+    
+    The knowledge has been integrated into the RAG system and will now enhance the planner_agent and analyser_agent workflows."
+    
+    ## Error Handling
+    If you encounter any issues:
+    1. Log the error: `agent_log("rag_agent", "error", "Error occurred: [describe the error]")`
+    2. Log finish: `agent_log("rag_agent", "finish", "Failed to complete document analysis")`
+    3. Report the specific error and suggest solutions
+    
+    ## Document Processing Guidelines
+    - **Focused Processing**: Focus on Results, Discussion, Conclusion, and Practical Applications sections
+    - **Quality Chunking**: Create as many meaningful chunks as needed to capture valuable content
+    - **Actionable Content**: Extract practical insights, findings, and recommendations
+    - **Chunk Quality**: Create meaningful, focused chunks that can stand alone
+    - **Metadata Extraction**: Extract accurate bibliographic information
+    - **Categorization**: Be precise in determining Training Plan vs Session Analysis
+    - **Knowledge Integration**: Ensure chunks are useful for both agents
+    - **Practical Focus**: Prioritize content that can be directly applied in training scenarios
+    """,
+    tools=[file_reader, create_rag_chunks, agent_log],
+)
+
 root_agent = Agent(
     name="ai_coach_agent",
     model="gemini-2.0-flash-exp",
@@ -747,6 +951,21 @@ root_agent = Agent(
     ### 3. Insights for activity with [date], [RPE value] and [user's feedback]
     1. Delegate to the `analyser_agent` to generate insights for the activity with the requested date, RPE score, and user's feedback, as text.
     2. Return the confirmation of the completion of the insights analysis from the `analyser_agent`
+
+    ### 4. RAG Document Processing: [file_path]
+    1. **CRITICAL**: IMMEDIATELY delegate to the `rag_agent` with the message containing the file path
+    2. The `rag_agent` will use the `file_reader` tool to read the document, categorize it (Training Plan or Session Analysis), and create RAG knowledge chunks
+    3. The chunks will be stored in the knowledge base and enhance future training plans and session analysis
+    4. Return confirmation of successful processing and integration
+
+    ### 5. Personalized Training Plans
+    When a user wants to create a personalized training plan with their goals and fitness data, delegate to the `planner_agent` with the user's input data including:
+    - Goal Plan (General Fitness, 5k, 10k, Half-marathon, Marathon, Ultra-Marathon)
+    - Race Date (optional)
+    - Age (optional)
+    - Weight in kg (optional)
+    - Average KMs per Week (optional)
+    - 5K Fastest Time in mm:ss format (optional)
     
     ## Feedback Guidelines for Completed Sessions
     When providing feedback for completed sessions, follow these principles:
@@ -773,31 +992,6 @@ root_agent = Agent(
     - Provide specific, actionable advice tailored to the situation
     - Maintain a supportive but honest tone
     - Vary your language and approach to sound natural and conversational
-
-    ## Calendar operations
-    You can perform calendar operations directly routing to the `scheduler_agent`.
-
-    ## Weather forecast
-    You can retrieve weather forecast by routing to the `scheduler_agent`.
-
-    ## Training Plan Operations
-    ### Uploaded Training Plans
-    When a user upload their training plan, immediately delegate to the `planner_agent` including the file path.
-    
-    ### Personalized Training Plans
-    When a user wants to create a personalized training plan with their goals and fitness data, delegate to the `planner_agent` with the user's input data including:
-    - Goal Plan (General Fitness, 5k, 10k, Half-marathon, Marathon, Ultra-Marathon)
-    - Race Date (optional)
-    - Age (optional)
-    - Weight in kg (optional)
-    - Average KMs per Week (optional)
-    - 5K Fastest Time in mm:ss format (optional)
-    
-    ### Session Queries
-    If you are asked about a specific session planned for either today or other days, delegate to the `scheduler_agent`.
-    
-    ## Be proactive and conversational
-    Be proactive when handling calendar requests. Don't ask unnecessary questions when the context or defaults make sense.
     
     Important:
     - Be super concise in your responses and only return the information requested (not extra information).
@@ -810,6 +1004,7 @@ root_agent = Agent(
         AgentTool(agent=strava_agent),
         AgentTool(agent=planner_agent),
         AgentTool(agent=analyser_agent),
+        AgentTool(agent=rag_agent),
         get_weekly_sessions
     ]
 )

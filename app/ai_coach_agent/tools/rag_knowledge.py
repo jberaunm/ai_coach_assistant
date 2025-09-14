@@ -193,6 +193,7 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
                     'distance': results['distances'][0][i] if 'distances' in results else None
                 }
                 chunks.append(chunk)
+        print(f"[RAG_KNOWLEDGE_TOOL] Retrieved {len(chunks)} relevant knowledge chunks")
         
         return {
             "status": "success",
@@ -201,6 +202,7 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
         }
         
     except Exception as e:
+        print(f"[RAG_KNOWLEDGE_TOOL] Error retrieving RAG knowledge: {str(e)}")
         return {
             "status": "error",
             "chunks": [],

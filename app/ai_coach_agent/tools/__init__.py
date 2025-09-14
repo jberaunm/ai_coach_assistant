@@ -16,6 +16,7 @@ from .plot_running_chart import plot_running_chart, plot_running_chart_laps
 from .agent_logger import agent_log
 from .activity_classifier import segment_activity_by_pace
 from .rag_knowledge import initialize_rag_knowledge, retrieve_rag_knowledge, get_all_rag_categories
+from .document_analyzer import create_rag_chunks
 
 __all__ = [
     "create_event",
@@ -43,5 +44,6 @@ __all__ = [
     "agent_log",
     "initialize_rag_knowledge",
     "retrieve_rag_knowledge",
-    "get_all_rag_categories"
+    "get_all_rag_categories",
+    "create_rag_chunks"
 ]
