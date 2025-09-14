@@ -207,7 +207,7 @@ def get_activity_with_laps(start_date: str) -> dict:
                 "activity_data": None,
             }
 
-        print(f"Found activity ID: {activity_id}")
+        print(f"[StravaAPI_tool] Found activity ID: {activity_id}")
 
         # Structure the complete data in the format expected by write_activity_data
         activity_data = {
@@ -258,7 +258,6 @@ def get_activity_with_laps(start_date: str) -> dict:
             activity_data["data_points"].append(data_point)
 
         print(f"[StravaAPI_tool] Successfully processed {total_data_points} lap data points for activity {activity_id}")
-        print(f"[StravaAPI_tool] Data processed: {activity_data}")
         return {
             "status": "success",
             "message": f"Retrieved complete lap data for activity {activity_id}",
@@ -324,7 +323,7 @@ def get_activity_complete(start_date: str) -> dict:
             }
 
         activity_id = target_activity.id
-        print(f"Found activity ID: {activity_id}")
+        print(f"[StravaAPI_tool] Found activity ID: {activity_id}")
 
         # Get detailed activity data (includes laps)
         detailed_activity = client.get_activity(activity_id)

@@ -132,20 +132,15 @@ export default function Insights({ date }: InsightsProps) {
   const [rpeValue, setRpeValue] = useState(5);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // RPE descriptions
   const rpeDescriptions = {
-    0: "Very light effort like walking",
     1: "Very light effort like walking", 
-    2: "Very light effort like walking",
-    3: "Light effort, comfortable pace where you can easily hold a conversation",
-    4: "Light effort, comfortable pace where you can easily hold a conversation",
-    5: "Moderate effort, breathing is heavier but you can still talk",
-    6: "Moderate effort, breathing is heavier but you can still talk",
-    7: "Hard effort, breathing is heavy and it's hard to talk",
-    8: "Hard effort, breathing is heavy and it's hard to talk",
-    9: "Maximum, all-out effort",
-    10: "Maximum, all-out effort"
+    2: "Light effort, comfortable pace where you can easily hold a conversation",
+    3: "Moderate effort, breathing is heavier but you can still talk",
+    4: "Hard effort, breathing is heavy and it's hard to talk",
+    5: "Maximum, all-out effort"
   };
 
   // Handle form submission
@@ -169,9 +164,10 @@ export default function Insights({ date }: InsightsProps) {
       const success = sendMessage(requestMessage);
       
       if (success) {
-        // Clear the form after successful submission
-        setFeedbackText("");
-        setRpeValue(5);
+        // Keep the form values visible after successful submission
+        // Don't clear the form so user can see what they submitted
+        setIsSubmitted(true);
+        console.log("Feedback submitted successfully");
       }
     } catch (error) {
       console.error("Error submitting feedback:", error);
@@ -242,8 +238,8 @@ export default function Insights({ date }: InsightsProps) {
                   </div>
                   <input
                     type="range"
-                    min="0"
-                    max="10"
+                    min="1"
+                    max="5"
                     value={rpeValue}
                     onChange={(e) => setRpeValue(parseInt(e.target.value))}
                     style={{
@@ -282,24 +278,40 @@ export default function Insights({ date }: InsightsProps) {
                   />
                 </div>
 
+                {/* Success Message */}
+                {isSubmitted && (
+                  <div style={{
+                    marginBottom: "15px",
+                    padding: "10px",
+                    backgroundColor: "#d4edda",
+                    border: "1px solid #c3e6cb",
+                    borderRadius: "4px",
+                    color: "#155724",
+                    fontSize: "14px",
+                    textAlign: "center"
+                  }}>
+                    ✓ Feedback submitted successfully! Your insights are being processed.
+                  </div>
+                )}
+
                 {/* Send Button */}
                 <button
                   onClick={handleSubmit}
-                  disabled={isSubmitting || !feedbackText.trim()}
+                  disabled={isSubmitting || !feedbackText.trim() || isSubmitted}
                   style={{
                     width: "100%",
                     padding: "12px",
-                    backgroundColor: isSubmitting || !feedbackText.trim() ? "#ccc" : "#2196f3",
+                    backgroundColor: isSubmitted ? "#28a745" : (isSubmitting || !feedbackText.trim() ? "#ccc" : "#2196f3"),
                     color: "white",
                     border: "none",
                     borderRadius: "4px",
                     fontSize: "14px",
                     fontWeight: "500",
-                    cursor: isSubmitting || !feedbackText.trim() ? "not-allowed" : "pointer",
+                    cursor: (isSubmitting || !feedbackText.trim() || isSubmitted) ? "not-allowed" : "pointer",
                     transition: "background-color 0.2s"
                   }}
                 >
-                  {isSubmitting ? "Sending..." : "Send Feedback"}
+                  {isSubmitted ? "✓ Feedback Submitted" : (isSubmitting ? "Sending..." : "Send Feedback")}
                 </button>
               </div>
             </div>
