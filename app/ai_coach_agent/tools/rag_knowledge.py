@@ -166,6 +166,7 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
             - message: Description of the result
     """
     try:
+        print(f"[RAG_KNOWLEDGE_TOOL] Retrieving RAG knowledge for query: {query}, category: {category}")
         # Get the RAG knowledge collection
         rag_collection = chroma_service.client.get_collection("rag_knowledge")
         

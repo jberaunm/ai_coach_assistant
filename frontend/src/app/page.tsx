@@ -2,7 +2,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import ChatAssistant from "./components/ChatAssistant";
-import FileUpload from "./components/FileUpload";
+import TrainingPlan from "./components/TrainingPlan";
 import DayOverviewCard from "./components/DayOverviewCard";
 import EventsCalendar from "./components/EventsCalendar";
 import WeatherForecast from "./components/WeatherForecast";
@@ -130,7 +130,7 @@ export default function Home() {
             <SessionOverview date={sharedDate} />
             <div className="stat-card">
               <h1>Training plan</h1>
-              <FileUpload websocket={websocket} />
+              <TrainingPlan websocket={websocket} />
               <div id="training-plan-status" style={{display: "none", alignItems: "center", gap: "8px"}}>
                 <svg id="uploaded-icon" width="24" height="24" fill="none" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="12" fill="#34A853" />
