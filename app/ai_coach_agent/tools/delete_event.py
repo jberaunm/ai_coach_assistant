@@ -28,6 +28,7 @@ def delete_event(
 
     try:
         # Get calendar service
+        print(f"[CalendarAPI_tool] START: Deleting event")
         service = get_calendar_service()
         if not service:
             return {
@@ -41,6 +42,7 @@ def delete_event(
         # Call the Calendar API to delete the event
         service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
 
+        print(f"[CalendarAPI_tool] FINISH: Event deleted")
         return {
             "status": "success",
             "message": f"Event {event_id} has been deleted successfully",
@@ -48,4 +50,5 @@ def delete_event(
         }
 
     except Exception as e:
+        print(f"[CalendarAPI_tool] ERROR: Error deleting event: {str(e)}")
         return {"status": "error", "message": f"Error deleting event: {str(e)}"}

@@ -166,7 +166,7 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
             - message: Description of the result
     """
     try:
-        print(f"[RAG_KNOWLEDGE_TOOL] Retrieving RAG knowledge for query: {query}, category: {category}")
+        print(f"[RAG_knowledge_base] START: Retrieving RAG knowledge for query: {query}, category: {category}")
         # Get the RAG knowledge collection
         rag_collection = chroma_service.client.get_collection("rag_knowledge")
         
@@ -193,7 +193,7 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
                     'distance': results['distances'][0][i] if 'distances' in results else None
                 }
                 chunks.append(chunk)
-        print(f"[RAG_KNOWLEDGE_TOOL] Retrieved {len(chunks)} relevant knowledge chunks")
+        print(f"[RAG_knowledge_base] FINISH: Retrieved {len(chunks)} relevant knowledge chunks")
         
         return {
             "status": "success",
@@ -203,7 +203,7 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
         
     except Exception as e:
         error_msg = str(e)
-        print(f"[RAG_KNOWLEDGE_TOOL] Error retrieving RAG knowledge: {error_msg}")
+        print(f"[RAG_knowledge_base] ERROR: Error retrieving RAG knowledge: {error_msg}")
         
         # Handle specific cases more gracefully
         if "does not exist" in error_msg.lower() or "collection" in error_msg.lower():

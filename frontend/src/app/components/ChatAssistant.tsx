@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 
 interface Message {
   id: string;
@@ -18,7 +18,16 @@ export default function ChatAssistant({ websocket }: ChatAssistantProps) {
   const [connected, setConnected] = useState(false);
   const [typing, setTyping] = useState(false);
   const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const messagesDivRef = useRef<HTMLDivElement>(null);
+
+  // Set initial load to false after component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 1000); // Wait 1 second after mount
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!websocket) return;
@@ -78,14 +87,12 @@ export default function ChatAssistant({ websocket }: ChatAssistantProps) {
     };
   }, [websocket, currentMessageId]);
 
-  // Scroll to bottom
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      if (messagesDivRef.current) {
-        messagesDivRef.current.scrollTop = messagesDivRef.current.scrollHeight;
-      }
-    }, 0);
-  };
+  // Scroll to bottom (only after initial load) 
+  const scrollToBottom = useCallback(() => {
+    if (!isInitialLoad && messagesDivRef.current) {
+      messagesDivRef.current.scrollTop = messagesDivRef.current.scrollHeight;
+    }
+  }, [isInitialLoad]);
 
   // Handle form submit
   const handleSubmit = (e: React.FormEvent) => {

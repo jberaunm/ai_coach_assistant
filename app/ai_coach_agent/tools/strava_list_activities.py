@@ -265,6 +265,7 @@ def get_activity_with_laps(start_date: str) -> dict:
         }
 
     except Exception as e:
+        print(f"[StravaAPI_tool] ERROR: Error fetching activity data: {str(e)}")
         return {
             "status": "error",
             "message": f"Error fetching activity data: {str(e)}",

@@ -321,7 +321,7 @@ button:active:not(:disabled) {
   font-weight: 600;
 }
 .drop-zone {
-  margin-top: 15px;
+  margin-top: 0px;
   padding: 20px;
   border: 2px dashed var(--gray-medium);
   border-radius: 8px;

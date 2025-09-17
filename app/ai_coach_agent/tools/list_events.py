@@ -31,7 +31,7 @@ def list_events(
         }
     """
     try:
-        print(f"[CalendarAPI_tool_list_events]") 
+        print(f"[CalendarAPI_tool] START: Retrieving calendar events with start_date {start_date} and days {days}") 
         # Get calendar service
         service = get_calendar_service()
         if not service:
@@ -130,6 +130,8 @@ def list_events(
             }
             formatted_events.append(formatted_event)
 
+        print(f"[CalendarAPI_tool] FINISH: Calendar events retrieved")
+        print(f"[CalendarAPI_tool] events: {formatted_events}")
         return {
             "status": "success",
             "message": f"Found {len(formatted_events)} event(s).",
@@ -139,10 +141,11 @@ def list_events(
         }
 
     except Exception as e:
+        print(f"[CalendarAPI_tool] ERROR: Error fetching events: {str(e)}")
         return {
             "status": "error",
             "message": f"Error fetching events: {str(e)}",
             "events": [],
         }
 
-#list_events("2025-08-12", 1)
+print(list_events(start_date="2025-09-18", days=1))

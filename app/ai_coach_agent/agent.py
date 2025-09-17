@@ -27,7 +27,6 @@ from .tools import (
     get_activity_with_laps,
     get_weather_forecast,
     file_reader,
-    read_image_as_binary,
     write_chromaDB,
     get_session_by_date,
     update_sessions_calendar_by_date,
@@ -246,89 +245,51 @@ scheduler_agent = LlmAgent(
     instruction=f"""
     You are a scheduler agent that helps users find the best time for their training sessions.
 
-    ## Logging Instructions
-    You MUST use the `agent_log` tool to log your execution when starting and finishing:
-    1. When you start processing: `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
-    2. When you finish: `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
-    3. If you encounter any errors: `agent_log("scheduler_agent", "error", "Error occurred: [describe the error]")`
-    
-    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
-
     ## Today's date and time
     Today's date is {get_current_time()}.
     Current time is {get_current_datetime()}.
 
     ## Main Workflow: "Day overview for [date]"
-    When asked about a schedule for a specific date, follow this exact process:
+    When asked about an overview of a specific date, you MUST follow this exact process:
 
-    1. **Get weather forecast**: Use tool `get_weather_forecast` with [date]. If the weather is not available, skip to step 3.
-    2. **Update weather in DB**: Use tool `update_sessions_weather_by_date`
-    3. **Get calendar events**: Use tool `list_events` with [date]. If no events are found, skip to step 4.
-    4. **Get training session**: Use tool `get_session_by_date` with the requested date. Extract *session_completed* and if it's set to *true*, END the workflow and only inform that the session has already been completed.
-    5. **Check for existing AI training session**: Look through the calendar events from step 3. If any event has a title ending with "AI Coach Session", then a training session has already been scheduled for this date.
-    6. **If AI session exists**:
-        a. **Check if session is in the past**: 
-           - Get current time using the current time context
-           - Compare the event's end time (HH:MM format) with current time (HH:MM format)
-           - If end_time < current_time, the session is in the past and needs rescheduling
-           - Example: if event ends at "08:00" and current time is "12:00", then "08:00" < "12:00" = TRUE (session is in past)
-        b. **If session is in the past**: 
-           - Extract the event_id from the calendar event
-           - Find a new suitable time based on calendar events and weather conditions
-           - Use `edit_event` tool to reschedule the session with the event_id, new start/end times
-           - Update the calendar in DB with the modified events
-           - Update time_scheduled in DB with the new scheduling information
-           - Inform the user that the session has been rescheduled
-        c. **If session is not in the past**:
-           - **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the events from step 3.
-           - Inform the user that the session has already been scheduled and proceed to step 8.
-    7. **If no AI session exists**: Continue with the following steps:
-       a. **Find the best time to do the training session**: based on calendar events and weather conditions, create a time_scheduled structure with start and end time, temperature, and weather description.
-       b. **Create training session event**: Use `create_event` to add the suggested training session to the calendar with:
-          - date: the requested date
-          - start_time: from the time_scheduled structure
-          - end_time: estimate the end time based on the distance
-          - title: "[Session Type] [distance] - AI Coach Session" (e.g., "Easy Run 10k - AI Coach Session")
-       c. **Update calendar in DB**: Use `update_sessions_calendar_by_date` with the same date and events from step 3, including the newly created event in step 7b, using start_time, end_time and title.
-       d. **Update time_scheduled in DB**: Use `update_sessions_time_scheduled_by_date` with the same date and the time_scheduled data structure
-    8. **Present information**: Inform the number of calendar events, the information about the training session and if the session is completed.
+    ### Step 1: Log Start
+    Call `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
 
-    ## CRITICAL: Time Comparison Implementation
-    When implementing step 6a, you MUST:
-    1. Extract the current time from the context (it's provided as "Current time is HH:MM")
-    2. Extract the event's end time from the calendar event (it's in "end" field in HH:MM format)
-    3. Perform string comparison: if event_end_time < current_time, then session is in the past
-    4. If session is in the past, you MUST proceed to step 6b (rescheduling)
-    5. If session is not in the past, proceed to step 6c
+    ### Step 2: Get Planned Training Session
+    Use tool `get_session_by_date` with the requested date to retrieve the planned training session.
+    - Extract the `session_completed` field
+    - **If `session_completed` is `true`**: Skip to Step 10 (session already completed)
+    - **If `session_completed` is `false` or missing**: Continue to Step 3
 
-    ## Response Format
-    Always respond with:
-    1. **If AI session already exists and is not in the past**: "You have already your session scheduled for [start_time]"
-    2. **If AI session exists but is in the past and was rescheduled**: "Your session was in the past, so I've rescheduled it for [new_start_time] to [new_end_time]"
-    3. **If new session created**: "I've scheduled your '[Session Type] [distance]' from [start_time] to [end_time], as it will be [weather condition] with [temperature]°C."
-    4. **If session_completed is marked as true**: "Your session has been marked as completed"
+    ### Step 3: Get Weather Forecast
+    Use tool `get_weather_forecast` with the requested date.
+    - **If weather data is available**: Continue to Step 4
+    - **If weather data is not available**: Skip to Step 5
 
-    ## Example
-    For "Day overview for 2025-07-09":
-    - Get weather: `get_weather_forecast(date="2025-07-09")`
-    - Update weather: `update_sessions_weather_by_date("2025-07-09", weather_data)`
-    - Get session: `get_session_by_date("2025-07-09")`
-    - Get calendar: `list_events(start_date="2025-07-09")`
-    - Check for AI session: Look for events ending with "AI Coach Session"
-    - If AI session exists:
-      - Check if end time is in the past by comparing with current time (HH:MM format)
-      - Example: if event ends at "08:00" and current time is "12:00", then "08:00" < "12:00" = TRUE (session is in past)
-      - If in the past: Extract event_id, find new suitable time, use `edit_event(event_id, new_start_time, new_end_time)` to reschedule
-      - If not in the past: Respond with "Your training session has already been scheduled for this date. You can see it in your calendar above."
-    - If no AI session exists:
-      - Find best time: based on calendar events and weather conditions, create a time_scheduled structure.
-      - Create event: `create_event("2025-07-09", "12:00", "13:00", "Easy Run 10k - AI Coach Session")`
-      - Update calendar: `update_sessions_calendar_by_date("2025-07-09", events)` (including the new event)
-      - Update time_scheduled: `update_sessions_time_scheduled_by_date("2025-07-09", time_scheduled_data)`
-    - In both cases, complete the workflow and provide the response.
+    ### Step 4: Update Weather in Database
+    Use tool `update_sessions_weather_by_date` with:
+    - date: the requested date
+    - weather_data: the weather data from Step 3
 
-    ## Time Scheduled Data Structure
-    When creating time_scheduled data, use this exact structure:
+    ### Step 5: Get Calendar Events
+    Use tool `list_events` with the requested date to retrieve all calendar events.
+    - **If no events found**: Proceed to Step 7
+    - **If events found**: Continue to Step 6
+
+    ### Step 6: Check for Existing AI Training Session
+    Look through the calendar events for any event with a title ending with "AI Coach Session".
+    - **If AI Coach Session EXISTS**: Go to Step 8
+    - **If AI Coach Session DOES NOT EXIST**: Go to Step 7
+
+    ### Step 7: Schedule New Training Session
+    **When no AI Coach Session exists:**
+    
+    a. **Find the Best Time**: Based on calendar events and weather conditions:
+       - Avoid conflicts with existing calendar events
+       - Prefer optimal weather conditions (10-20°C, clear/sunny)
+       - Choose convenient time slots (6:00 AM to 9:00 PM)
+    
+    b. **Create Time Scheduled Structure**:
     ```json
     [
         {{
@@ -341,27 +302,93 @@ scheduler_agent = LlmAgent(
         }}
     ]
     ```
+    
+    c. **Create New Calendar Event**: Use `create_event` with:
+       - date: the requested date
+       - start_time: from the time_scheduled structure
+       - end_time: estimate based on distance (1 hour per 10km)
+       - title: "[Session Type] [distance] - AI Coach Session"
+    
+    d. **Update Database**: 
+       - Use `update_sessions_calendar_by_date` with the date and all events (including the new one)
+       - Use `update_sessions_time_scheduled_by_date` with the date and time_scheduled data
+
+    ### Step 8: Handle Existing AI Training Session
+    **When AI Coach Session already exists:**
+    
+    a. **Compare Current Time with Session End Time**:
+       - Get current time from context
+       - Compare event's end time (HH:MM) with current time (HH:MM)
+       - **If end_time < current_time**: Session is in the past → Go to Step 8b
+       - **If end_time >= current_time**: Session is still upcoming → Go to Step 8c
+    
+    b. **Reschedule Missed Session** (end_time < current_time):
+       - Extract the event_id from the calendar event
+       - Find a new suitable time based on calendar events and weather
+       - Use `edit_event` to reschedule with event_id and new times
+       - Update calendar in database with modified events
+       - Update time_scheduled in database with new scheduling
+       - Inform user that session has been rescheduled
+    
+    c. **Update Existing Session** (end_time >= current_time):
+       - Use `update_sessions_calendar_by_date` with the events from Step 5
+       - Session is still valid, no rescheduling needed
+
+    ### Step 9: Present Information
+    Provide a summary including:
+    - Number of calendar events
+    - Training session information (type, distance, time)
+    - Session completion status
+    - Weather conditions
+    - Any scheduling changes made
+
+    ### Step 10: Log Finish
+    Call `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
+
+    ## Workflow Example
+    **Example: "Day overview for 2025-01-15"**
+
+    1. **Log Start**: `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
+    
+    2. **Get Session**: `get_session_by_date("2025-01-15")` → Returns: Easy Run 10k, session_completed: false
+    
+    3. **Get Weather**: `get_weather_forecast("2025-01-15")` → Returns: Clear, 15°C
+    
+    4. **Update Weather**: `update_sessions_weather_by_date("2025-01-15", weather_data)`
+    
+    5. **Get Calendar**: `list_events("2025-01-15")` → Returns: Meeting at 2:00 PM, Dinner at 7:00 PM
+    
+    6. **Check AI Session**: No existing "AI Coach Session" found
+    
+    7. **Schedule New Session**:
+       - Best time: 6:00 AM (avoids meetings, good weather)
+       - Create time_scheduled: [{{"title": "Easy run 10k", "start": "06:00", "end": "07:00", "tempC": "15", "desc": "Clear", "status": "scheduled"}}]
+       - Create event: "Easy Run 10k - AI Coach Session" at 6:00-7:00 AM
+       - Update database with new event and time_scheduled
+    
+    8. **Present**: "You have 2 calendar events today. I've scheduled your Easy Run 10k for 6:00 AM to avoid your afternoon meeting and take advantage of the clear, 15°C weather."
+    
+    9. **Log Finish**: `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
+
+    ## Time Comparison Logic
+    - Current time: 12:00 PM
+    - Session end time: 08:00 AM
+    - Comparison: "08:00" < "12:00" = TRUE (session is in the past, needs rescheduling)
 
     ## Important Notes
     - Always use YYYY-MM-DD format for dates
     - Always update ChromaDB after retrieving calendar and weather data
     - Be concise and only provide the requested information
     - The time_scheduled data must be a list of dictionaries with all required fields
+
+    ## Logging Instructions
+    You MUST use the `agent_log` tool to log your execution when starting and finishing:
+    1. When you start processing: `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
+    2. When you finish: `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
+    3. If you encounter any errors: `agent_log("scheduler_agent", "error", "Error occurred: [describe the error]")`
     
-    ## Time Comparison and Rescheduling
-    - When checking if an AI session is in the past, compare the event's end time with the current time
-    - Current time format: HH:MM (24-hour format)
-    - Event times from calendar are in HH:MM format, so direct time comparison is possible
-    - **CRITICAL TIME COMPARISON LOGIC**:
-      - Use string comparison: if event_end_time < current_time, then session is in the past
-      - Example: "08:00" < "12:00" = TRUE (session is in past)
-      - Example: "15:00" < "12:00" = FALSE (session is not in past)
-    - **When rescheduling is needed**:
-      - Extract event_id from the calendar event
-      - Find a new suitable time slot (avoid conflicts with existing events)
-      - Use `edit_event(event_id, new_start_time, new_end_time)` where times are in YYYY-MM-DD HH:MM format
-      - Update both calendar and time_scheduled data in the database
-    - After rescheduling, update both the calendar and time_scheduled data in the database
+    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
+    
     """,
     tools=[get_weather_forecast,
            list_events,
@@ -387,8 +414,7 @@ strava_agent = LlmAgent(
     Today's date is {get_current_time()}.
     Current time is {get_current_datetime()}.
 
-    ## Main Workflows:
-    ### Daily Overview for a specific date
+    ## Main Workflows: Daily Overview for a specific date
     When asked about a strava activities for a specific date, follow this exact process:
 
         1. **Get strava activities**: Use `get_activity_with_laps` with the requested date.
@@ -401,60 +427,52 @@ strava_agent = LlmAgent(
                 - actual_start: the actual_start time from the response metadata
                 - actual_distance: the actual_distance from the response metadata
                 - data_points: the data_points from the response
-            d. Log the session completion: `agent_log("strava_agent", "step", "Session marked as completed with actual start time")`
-        
-        * Response Structure from get_activity_with_laps
-        The `get_activity_with_laps` tool returns a response with this structure:
-        ```json
-        {{
-            "status": "success",
-            "message": "Retrieved complete data for activity 15162967332 on 2025-07-19",
-            "activity_data": {{
-                "activity_id": 15162967332,
-                "metadata": {{
-                    "type": "Run",
-                    "name": "Rainy Hill Parkrun",
-                    "actual_distance": 10.52,
-                    "duration": "55m 20s",
-                    "start_date": "2025-07-19 08:33",
-                    "actual_start": "08:33",
-                    "pace": "5:15/km",
-                    "total_laps": 8
-                }},
-                "data_points": {{
-                    "laps": [
-                        {{
-                            "lap_index": 1,
-                            "distance_meters": 1000.0,
-                            "pace_ms": 3.06,
-                            "pace_min_km": "5:15km",
-                            "heartrate_bpm": 121.1,
-                            "cadence": 158.8,
-                            "elapsed_time": 327
-                        }}
-                    ]
-                }}
+        3. **Log Finish and Respond**: Call `agent_log("strava_agent", "finish", "Successfully completed strava_agent workflow")`
+        4. **Error Handling**: In case the workflow fails, Call `agent_log("strava_agent", "finish", "Finished with error: [describe the error]")`
+    * Response Structure from get_activity_with_laps
+    The `get_activity_with_laps` tool returns a response with this structure:
+    ```json
+    {{
+        "status": "success",
+        "message": "Retrieved complete data for activity 15162967332 on 2025-07-19",
+        "activity_data": {{
+            "activity_id": 15162967332,
+            "metadata": {{
+                "type": "Run",
+                "name": "Rainy Hill Parkrun",
+                "actual_distance": 10.52,
+                "duration": "55m 20s",
+                "start_date": "2025-07-19 08:33",
+                "actual_start": "08:33",
+                "pace": "5:15/km",
+                "total_laps": 8
+            }},
+            "data_points": {{
+                "laps": [
+                    {{
+                        "lap_index": 1,
+                        "distance_meters": 1000.0,
+                        "pace_ms": 3.06,
+                        "pace_min_km": "5:15km",
+                        "heartrate_bpm": 121.1,
+                        "cadence": 158.8,
+                        "elapsed_time": 327
+                    }}
+                ]
             }}
         }}
-        ```
+    }}
+    ```
 
-        ## Required Function Calls
-        When an activity is found, you MUST call these functions in order:
+    ## Required Function Calls
+    When an activity is found, you MUST call these functions in order:
 
-        1. **mark_session_completed_by_date**:
-        - date: the requested date (e.g., "2025-07-19")
-        - id: activity_id from the response (e.g., 15162967332)
-        - actual_start: actual_start from metadata (e.g., "08:33")
-        - actual_distance: actual_distance from metadata (e.g., 10.52)
-        - data_points: data_points from the response
-
-    ## Logging Instructions
-    You MUST use the `agent_log` tool to log your execution:
-    1. When you start processing: `agent_log("strava_agent", "start", "Starting to get Strava activities")`
-    2. When you finish: `agent_log("strava_agent", "finish", "Successfully retrieved Strava activities")`
-    3. If you encounter any errors: `agent_log("strava_agent", "error", "Error occurred: [describe the error]")`
-
-    **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
+    1. **mark_session_completed_by_date**:
+    - date: the requested date (e.g., "2025-07-19")
+    - id: activity_id from the response (e.g., 15162967332)
+    - actual_start: actual_start from metadata (e.g., "08:33")
+    - actual_distance: actual_distance from metadata (e.g., 10.52)
+    - data_points: data_points from the response
 
     ## Output Format
     **CRITICAL**: When providing your final response to the user, you MUST NOT include:
@@ -471,6 +489,7 @@ strava_agent = LlmAgent(
     **EXAMPLE OUTPUT**:
     Instead of showing the full response with laps data, provide a clean summary like:
     "Found your run: 'Rainy Hill Parkrun' - 10.52km. Session marked as completed and stored in database."
+
     """,
     tools=[get_activity_with_laps,
            mark_session_completed_by_date,
@@ -524,6 +543,9 @@ analyser_agent = LlmAgent(
       - **Success**: "Activity segmentation completed successfully" (when status = "success")
       - **Failure**: Brief error description (only when status = "error")
     
+    ### Step 6: Log Finish and Respond
+    Call `agent_log("analyser_agent", "finish", "Activity segmentation completed successfully")`
+
     ## Main Workflow 2: Insights for activity with [date], [RPE] and [user's feedback]
     **CRITICAL DATE HANDLING**: Throughout this entire workflow, you MUST use the EXACT same date that was provided in the user's request. Do not change or modify the date for any reason.
     
@@ -579,7 +601,10 @@ analyser_agent = LlmAgent(
     ### Step 7: **RESPONSE FORMAT**: Your final response must be one of these two options:
         - **Success**: "Insights analysis completed successfully" (when status = "success")
         - **Failure**: Brief error description (only when status = "error")
-         
+    
+    ### Step 8: Log Finish and Respond
+    Call `agent_log("analyser_agent", "finish", "Insights analysis completed successfully")`
+
     **IMPORTANT**: In the analysis, do NOT include:
         - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
         - Duration details for segments
@@ -673,12 +698,6 @@ analyser_agent = LlmAgent(
     - Analyze pace consistency and progression
     - Evaluate heart rate zones and effort distribution
     - Provide specific, actionable recommendations for improvement
-
-    ## Logging Instructions
-    You MUST use the `agent_log` tool to log your execution:
-    1. When you start processing: `agent_log("analyser_agent", "start", "Starting analysis of activity")`
-    2. When you finish: `agent_log("analyser_agent", "finish", "[Workflow Type] Successfully completed analysis of activity")`
-    3. If you encounter any errors: `agent_log("analyser_agent", "error", "Error occurred: [describe the error]")`
 
     **CRITICAL**: You MUST ALWAYS call the finish log at the end of your execution, regardless of success or failure.
     
@@ -927,30 +946,37 @@ root_agent = Agent(
     ## MAIN WORKFLOWS:
 
     ### 1. Day overview for [date]
-    You MUST always complete the following three steps:
-    1. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
-    2. Delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
-    3. Delegate to the `analyser_agent` to analyze the activity, specifically the Main Workflow 1: Segmentation of the activity for [date] if the session was completed.
-    
+    1. If [date] is today or in the past, you MUST always complete the following three steps:
+        a. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
+        b. Delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
+        c. Delegate to the `analyser_agent` to analyze the activity, specifically the Main Workflow 1: Segmentation of the activity for [date] if the session was completed.
+    2. If [date] is in the future, you MUST complete the following step:
+        a. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
+    3. Call `agent_log("ai_coach_agent", "finish", "Day overview for [date] completed")`
+        
     ### 2. Analysis of activity for [date]
     You have two distinct workflows for activity analysis:
     1. **Analysis workflow**: For segmenting activity data only
+    2. Call `agent_log("ai_coach_agent", "finish", "Analysis of activity for [date] completed")`
     
     ### 3. Insights for activity with [date], [RPE value] and [user's feedback]
     1. Delegate to the `analyser_agent` to generate insights for the activity with the requested date, RPE score, and user's feedback, as text.
     2. Return the confirmation of the completion of the insights analysis from the `analyser_agent`
+    3. Call `agent_log("ai_coach_agent", "finish", "Insights for activity with [date], [RPE value] and [user's feedback] completed")`
 
     ### 4. RAG Document Processing: [file_path]
     1. **CRITICAL**: IMMEDIATELY delegate to the `rag_agent` with the message containing the file path
     2. The `rag_agent` will use its multi-modal capabilities to directly analyze the document as an attachment, categorize it (Training Plan or Session Analysis), and create RAG knowledge chunks
     3. The chunks will be stored in the knowledge base and enhance future training plans and session analysis
     4. Return confirmation of successful processing and integration
+    5. Call `agent_log("ai_coach_agent", "finish", "RAG Document Processing: [file_path] completed")`
 
     ### 5. Uploaded Plan Processing: [file_path]
     1. **CRITICAL**: IMMEDIATELY delegate to the `planner_agent` with the message containing the file path
     2. The `planner_agent` will use the `file_reader` tool to read the document, parse the training plan, and store it in the knowledge base
     3. The training plan will be stored in the knowledge base and enhance future training plans and session analysis
     4. Return confirmation of successful processing and integration
+    5. Call `agent_log("ai_coach_agent", "finish", "Uploaded Plan Processing: [file_path] completed")`
 
     ### 6. Personalized Training Plans
     1. When a user wants to create a personalized training plan with their goals and fitness data, delegate to the `planner_agent` with the user's input data including:
@@ -961,6 +987,7 @@ root_agent = Agent(
         - Average KMs per Week (optional)
         - 5K Fastest Time in mm:ss format (optional)
     2. Return the confirmation of the completion of the personalized training plan creation from the `planner_agent`
+    3. Call `agent_log("ai_coach_agent", "finish", "Personalized Training Plans completed")`
     
     ## Feedback Guidelines for Completed Sessions
     When providing feedback for completed sessions, follow these principles:

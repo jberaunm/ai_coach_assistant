@@ -199,6 +199,7 @@ def update_sessions_weather_by_date(date: str, weather_data: dict):
         Dict with status and message
     """
     try:
+        print(f"[chromaDB_tools] Updating weather for {date}")
         # Get all sessions for the specified date
         results = chroma_service.collection.get(where={"date": date})
         
@@ -249,13 +250,14 @@ def update_sessions_weather_by_date(date: str, weather_data: dict):
                 ids=[session_id],
                 metadatas=[current_metadata]
             )
-        
+        print(f"[chromaDB_tools] Successfully updated weather for {len(results['ids'])} sessions on {date}")
         return {
             "status": "success",
-            "message": f"Successfully updated weather for {len(results['ids'])} sessions on {date} with {len(filtered_hours)} filtered hours"
+            "message": f"success"
         }
         
     except Exception as e:
+        print(f"[chromaDB_tools] Error updating sessions weather by date: {str(e)}")
         return {
             "status": "error",
             "message": f"Error updating sessions weather by date: {str(e)}"

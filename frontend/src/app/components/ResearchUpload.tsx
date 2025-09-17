@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from "react";
 
 interface ResearchFile {
   id: string;
+  documentId: string; // Add document ID for deletion
   filename: string;
   title: string;
   authors: string;
@@ -31,6 +32,7 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [researchFiles, setResearchFiles] = useState<ResearchFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
 
   // Fetch existing research files on component mount
@@ -50,6 +52,7 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
             
             return {
               id: source.document_id || `source_${index}`,
+              documentId: source.document_id || `source_${index}`,
               filename: filename,
               title: cleanTitle,
               authors: source.authors && source.authors !== 'Unknown' ? source.authors : undefined,
@@ -102,6 +105,7 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
                   
                   return {
                     id: source.document_id || `source_${index}`,
+                    documentId: source.document_id || `source_${index}`,
                     filename: filename,
                     title: cleanTitle,
                     authors: source.authors && source.authors !== 'Unknown' ? source.authors : undefined,
@@ -216,6 +220,7 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
           // Add to local state as processing
           const newFile: ResearchFile = {
             id: Date.now().toString(),
+            documentId: Date.now().toString(), // Temporary ID for processing files
             filename: file.name,
             title: "Processing...",
             authors: "Processing...",
@@ -322,12 +327,46 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
     });
   };
 
+  const handleDeleteRAGEntry = async (fileId: string, documentId: string) => {
+    if (deletingIds.has(fileId)) return;
+    
+    const confirmed = window.confirm('Are you sure you want to delete this research file? This action cannot be undone.');
+    if (!confirmed) return;
+    
+    setDeletingIds(prev => new Set(prev).add(fileId));
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/rag-entry/${documentId}`, {
+        method: 'DELETE'
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        setResearchFiles(prev => prev.filter(file => file.id !== fileId));
+        setUploadStatus("Research file deleted successfully!");
+      } else {
+        setUploadStatus("Failed to delete research file. Please try again.");
+      }
+    } catch (error) {
+      console.error('Error deleting RAG entry:', error);
+      setUploadStatus("Failed to delete research file. Please try again.");
+    } finally {
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+      setTimeout(() => setUploadStatus(""), 3000);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       {/* Upload Section */}
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <h2 style={{ 
-          margin: "0 0 16px 0", 
+          margin: "0 0 0 0", 
           fontSize: "20px", 
           fontWeight: "600",
           color: "#1e293b"
@@ -348,7 +387,7 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
             cursor: "pointer",
             border: "2px dashed #d1d5db",
             borderRadius: "8px",
-            padding: "32px",
+            padding: "0",
             textAlign: "center",
             backgroundColor: dragOver ? "#f3f4f6" : "#fafafa",
             transition: "all 0.2s ease"
@@ -493,12 +532,48 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
                       {file.filename}
                     </span>
                   </div>
-                  <span style={{ 
-                    fontSize: "12px", 
-                    color: "#6b7280"
-                  }}>
-                    {formatUploadDate(file.uploadedAt)}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ 
+                      fontSize: "12px", 
+                      color: "#6b7280"
+                    }}>
+                      {formatUploadDate(file.uploadedAt)}
+                    </span>
+                    {file.status === 'completed' && (
+                      <button
+                        onClick={() => handleDeleteRAGEntry(file.id, file.documentId)}
+                        disabled={deletingIds.has(file.id)}
+                        style={{
+                          padding: "4px 8px",
+                          backgroundColor: "#ef4444",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          cursor: deletingIds.has(file.id) ? "not-allowed" : "pointer",
+                          opacity: deletingIds.has(file.id) ? 0.6 : 1,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px"
+                        }}
+                        title="Delete research file"
+                      >
+                        {deletingIds.has(file.id) ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="animate-spin">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="31.416" strokeDashoffset="31.416">
+                              <animate attributeName="stroke-dasharray" dur="2s" values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite"/>
+                              <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416" repeatCount="indefinite"/>
+                            </circle>
+                          </svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                            <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+{deletingIds.has(file.id) ? "Deleting..." : ""}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 <div style={{ 

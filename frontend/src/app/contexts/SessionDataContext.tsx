@@ -223,7 +223,7 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
         setScheduling(false);
         pendingSchedulingDate.current = '';
       }
-    }, 30000); // 30 second fallback timeout
+    }, 90000); // 30 second fallback timeout
     
     try {
       const message = {
@@ -316,24 +316,6 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
           }
         }
         
-        // Check if this is a turn_complete message (agent finished processing)
-        if (data.turn_complete === true && pendingSchedulingDate.current) {
-          console.log(`Day overview completed for ${pendingSchedulingDate.current}, fetching updated data`);
-          
-          // Clear the fallback timeout since we got a response
-          if ((scheduleDay as any).fallbackTimeout) {
-            clearTimeout((scheduleDay as any).fallbackTimeout);
-            (scheduleDay as any).fallbackTimeout = null;
-          }
-          
-          // Wait a moment for the database to be updated, then fetch fresh data
-          setTimeout(() => {
-            fetchSessionData(pendingSchedulingDate.current);
-            fetchWeeklyData(); // Also refresh weekly data when agent finishes
-            setScheduling(false);
-            pendingSchedulingDate.current = '';
-          }, 1000); // Short delay to ensure DB is updated
-        }
       } catch (err) {
         // Ignore parsing errors for non-JSON messages
         console.log('Non-JSON message received:', messageText);

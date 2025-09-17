@@ -15,7 +15,7 @@ def file_reader(file_path: str) -> str:
         The content of the file as text, or base64 encoded if binary.
     """
  
-    print(f"[FileReader_tool]: {file_path}")
+    print(f"[FileReader_tool] START: Reading file: {file_path}")
     # Normalize the file path to handle different separators
     normalized_path = str(file_path).replace('\\', '/').strip()
 
@@ -32,8 +32,8 @@ def file_reader(file_path: str) -> str:
             with open(normalized_path, 'rb') as f:
                 encoded = base64.b64encode(f.read()).decode('utf-8')
                 content = f"[BINARY FILE - base64 encoded]\n{encoded}"
-                print(f"[FileReader_tool] Binary file: {normalized_path}")
+                print(f"[FileReader_tool] FINISH: Binary file: {normalized_path}")
             return content
     except Exception as e:
-        print(f"[FileReader_tool] Error reading file: {str(e)}")
+        print(f"[FileReader_tool] ERROR: Error reading file: {str(e)}")
         return f"Error reading file: {str(e)}"

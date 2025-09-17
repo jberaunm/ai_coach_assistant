@@ -143,17 +143,17 @@ export default function Home() {
           </div>
         </SessionDataProvider>
         <div className="third-column">
-          <div className="stat-card">
-            <h1 style={{ marginBottom: 12 }}>Chat Interaction</h1>
-            <ChatAssistant websocket={websocket} />
-          </div>
           <div className="stat-card agent-flow-card">
-            <h1 style={{ marginBottom: 12 }}>AI Agent Flow</h1>
+            <h1 style={{ marginBottom: 2 }}>AI Agent Flow</h1>
             <AgentFlowDiagramReactFlow websocket={websocket} />
           </div>
           <div className="stat-card">
-            <h1 style={{ marginBottom: 12 }}>Research Knowledge Base</h1>
+            <h1 style={{ marginBottom: 2 }}>Research Knowledge Base</h1>
             <ResearchUpload websocket={websocket} />
+          </div>
+          <div className="stat-card">
+            <h1 style={{ marginBottom: 2 }}>Chat Interaction</h1>
+            <ChatAssistant websocket={websocket} />
           </div>
         </div>
       </div>

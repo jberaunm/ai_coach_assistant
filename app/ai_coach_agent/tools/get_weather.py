@@ -18,6 +18,7 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
     Returns:
         Dict containing weather forecast data with current conditions and hourly forecast
     """
+    print(f"[WeatherAPI_tool] START: Getting weather forecast for {date}")
     # Get API key from environment variable or use fallback
     api_key = os.getenv("WORLDWEATHER_API_KEY")
 
@@ -41,7 +42,6 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
     }
     
     try:
-        print(f"[WeatherAPI_tool] Getting weather forecast for {date}")
         response = requests.get(url, params=params)
         
         if response.status_code != 200:
@@ -93,6 +93,7 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
                 "desc": condition.strip() if condition else "",
             })
         
+        print(f"[WeatherAPI_tool] FINISH: Getting weather forecast for {date}")
         return {
             "status": "success",
             "date": date,
@@ -103,6 +104,7 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
         }
         
     except Exception as e:
+        print(f"[WeatherAPI_tool] ERROR: Error retrieving weather data: {str(e)}")
         return {
             "status": "error",
             "message": f"Error retrieving weather data: {str(e)}"
