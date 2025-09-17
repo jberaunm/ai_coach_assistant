@@ -85,6 +85,7 @@ def clear_current_websocket():
     global _current_websocket
     _current_websocket = None
 
+
 # Replace the global print function
 print_interceptor = PrintInterceptor()
 import builtins
@@ -196,13 +197,17 @@ async def agent_to_client_messaging(
             # Only send text if it's a partial response (streaming)
             # Skip the final complete message to avoid duplication
             if part.text and event.partial:
-                message = {
-                    "mime_type": "text/plain",
-                    "data": part.text,
-                    "role": "model",
-                }
-                await websocket.send_text(json.dumps(message))
-                #print(f"[AGENT TO CLIENT]: text/plain: {part.text}")
+                text_content = part.text.strip()
+                
+                # Only skip obvious system warnings, not agent responses
+                if text_content and len(text_content) > 3:
+                    message = {
+                        "mime_type": "text/plain",
+                        "data": text_content,
+                        "role": "model",
+                    }
+                    await websocket.send_text(json.dumps(message))
+                    #print(f"[AGENT TO CLIENT]: text/plain: {text_content}")
 
             # If it's audio, send Base64 encoded audio data
             is_audio = (
@@ -222,6 +227,18 @@ async def agent_to_client_messaging(
                     #print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
     except Exception as e:
         print(f"Error in agent_to_client_messaging: {e}")
+        # Send error message to client instead of raising
+        try:
+            error_message = {
+                "mime_type": "text/plain",
+                "data": f"I apologize, but there was an error processing your request. Please try again.",
+                "role": "model",
+                "turn_complete": True,
+                "error": True
+            }
+            await websocket.send_text(json.dumps(error_message))
+        except Exception as send_error:
+            print(f"Error sending error message to client: {send_error}")
         raise
 
 
@@ -325,7 +342,7 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
             normalized_path = str(file_path).replace('\\', '/')  # Normalize path separators
             message = {
                 "mime_type": "text/plain",
-                "data": f"can you parse my training plan? this is the file path: {normalized_path}",
+                "data": f"Uploaded Plan Processing: {normalized_path}",
                 "role": "user"
             }
             
@@ -335,7 +352,7 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
                 # Send the message through the live_request_queue
                 content = types.Content(role="user", parts=[types.Part.from_text(text=message["data"])])
                 websocket.live_request_queue.send_content(content=content)
-                print(f"Message sent to agent through live_request_queue: {message['data']}")
+                print(f"[FRONTEND TO AGENT]: {message['data']}")
             else:
                 print(f"No live_request_queue found for session {session_id}")
             
@@ -444,6 +461,18 @@ async def websocket_endpoint(
         await asyncio.gather(agent_to_client_task, client_to_agent_task)
     except Exception as e:
         print(f"WebSocket error for session {session_id}: {e}")
+        # Send a user-friendly error message before closing the connection
+        try:
+            error_message = {
+                "mime_type": "text/plain",
+                "data": f"I apologize, but there was an unexpected error. Please try again.",
+                "role": "model",
+                "turn_complete": True,
+                "error": True
+            }
+            await websocket.send_text(json.dumps(error_message))
+        except Exception as send_error:
+            print(f"Error sending error message to client: {send_error}")
         raise  # Re-raise the exception to ensure proper error handling
     finally:
         # Remove the connection when it's closed
