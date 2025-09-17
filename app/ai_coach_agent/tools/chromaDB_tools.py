@@ -73,7 +73,7 @@ def write_chromaDB(sessions: List[Dict[str, Any]]):
             - date: str
             - day: str
             - type: str
-            - distance: str or float
+            - distance: float
             - notes: Optional[str]
             - calendar: Optional[Dict] (will be initialized empty)
             - weather: Optional[Dict] (will be initialized empty)

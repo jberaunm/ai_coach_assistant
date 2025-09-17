@@ -202,12 +202,22 @@ def retrieve_rag_knowledge(query: str, n_results: int = 3, category: Optional[st
         }
         
     except Exception as e:
-        print(f"[RAG_KNOWLEDGE_TOOL] Error retrieving RAG knowledge: {str(e)}")
-        return {
-            "status": "error",
-            "chunks": [],
-            "message": f"Error retrieving RAG knowledge: {str(e)}"
-        }
+        error_msg = str(e)
+        print(f"[RAG_KNOWLEDGE_TOOL] Error retrieving RAG knowledge: {error_msg}")
+        
+        # Handle specific cases more gracefully
+        if "does not exist" in error_msg.lower() or "collection" in error_msg.lower():
+            return {
+                "status": "success",  # Treat missing collection as success with empty results
+                "chunks": [],
+                "message": "RAG knowledge base not yet initialized - no research documents available"
+            }
+        else:
+            return {
+                "status": "error",
+                "chunks": [],
+                "message": f"Error retrieving RAG knowledge: {error_msg}"
+            }
 
 def get_all_rag_categories() -> Dict[str, Any]:
     """Get all available categories in the RAG knowledge base.
