@@ -30,7 +30,7 @@ def agent_log(
     elif event_type == "finish":
         log_message = f"[{agent_name.upper()}] FINISH: {message}"
     elif event_type == "error":
-        log_message = f"[{agent_name.upper()}] ERROR: {message}"
+        log_message = f"[{agent_name.upper()}] FINISH: {message}"
     else:
         log_message = f"[{agent_name.upper()}] {message}"
     

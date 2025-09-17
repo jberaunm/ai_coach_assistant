@@ -25,7 +25,7 @@ def create_event(
         dict: Information about the created event or error details
     """
     try:
-        print(f"[CalendarAPI_tool_create_event]")
+        print(f"[CalendarAPI_tool] START: Creating event")
         # Get calendar service
         service = get_calendar_service()
         if not service:
@@ -83,6 +83,7 @@ def create_event(
             service.events().insert(calendarId=calendar_id, body=event_body).execute()
         )
 
+        print(f"[CalendarAPI_tool] FINISH: Event created")
         return {
             "status": "success",
             "message": "Event created successfully",
@@ -91,4 +92,5 @@ def create_event(
         }
 
     except Exception as e:
+        print(f"[CalendarAPI_tool] ERROR: Error creating event: {str(e)}")
         return {"status": "error", "message": f"Error creating event: {str(e)}"}

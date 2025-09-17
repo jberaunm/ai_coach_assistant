@@ -26,7 +26,7 @@ def edit_event(
     """
     try:
         # Get calendar service
-        print(f"[CalendarAPI_tool_edit_event]: event_id: {event_id}, date: {date}, start_time: {start_time}, end_time: {end_time}, title: {title}")
+        print(f"[CalendarAPI_tool] START: Editing event")
         service = get_calendar_service()
         if not service:
             return {
@@ -79,8 +79,6 @@ def edit_event(
         event_body["end"] = {"dateTime": end_dt.isoformat(), "timeZone": timezone_id}
         event_body["id"] = event_id
 
-        
-
         # Update the event
         updated_event = (
             service.events()
@@ -88,10 +86,12 @@ def edit_event(
             .execute()
         )
 
+        print(f"[CalendarAPI_tool] FINISH: Event updated")
         return {
             "status": "success",
             "message": "Event updated successfully",
         }
 
     except Exception as e:
+        print(f"[CalendarAPI_tool] ERROR: Error updating event: {str(e)}")
         return {"status": "error", "message": f"Error updating event: {str(e)}"}

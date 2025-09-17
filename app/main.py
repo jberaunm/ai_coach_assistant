@@ -44,14 +44,14 @@ class PrintInterceptor:
             '[SCHEDULER_AGENT]',
             '[STRAVA_AGENT]',
             '[ANALYSER_AGENT]',
-            '[NUMERICAL_ANALYSER_AGENT]',
-            '[VISUAL_ANALYSER_AGENT]',
             '[RAG_AGENT]',
+            '[AI_COACH_AGENT]',
             '[FileReader_tool]',
-            '[CalendarAPI_tool_create_event]',
-            '[CalendarAPI_tool_list_events]',
+            '[CalendarAPI_tool]',
             '[WeatherAPI_tool]',
             '[StravaAPI_tool]',
+            '[chromaDB_tools]',
+            '[RAG_knowledge_base]',
             '[ChartCreator_tool]',
         ]
     
@@ -710,3 +710,137 @@ async def get_rag_stats():
     except Exception as e:
         print(f"Error in get_rag_stats: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrieving RAG stats: {str(e)}")
+
+@app.get("/api/training-plan-stats")
+async def get_training_plan_stats():
+    """Get statistics about training plans stored in ChromaDB."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        # Get all sessions from the main collection
+        results = chroma_service.collection.get()
+        
+        if not results['ids']:
+            return {
+                "status": "success",
+                "total_sessions": 0,
+                "plans": [],
+                "message": "No training plans found"
+            }
+        
+        # Group sessions by plan (we'll use date ranges to identify plans)
+        # For now, we'll treat all sessions as one plan, but this could be enhanced
+        # to group by plan metadata if we add plan_id to the metadata
+        
+        # Extract unique dates to determine plan coverage
+        dates = set()
+        session_types = {}
+        total_distance = 0
+        
+        for metadata in results['metadatas']:
+            date = metadata.get('date', '')
+            if date:
+                dates.add(date)
+            
+            session_type = metadata.get('type', 'Unknown')
+            session_types[session_type] = session_types.get(session_type, 0) + 1
+            
+            distance = metadata.get('distance', 0)
+            if isinstance(distance, (int, float)):
+                total_distance += distance
+        
+        # Sort dates to get plan range
+        sorted_dates = sorted(dates) if dates else []
+        start_date = sorted_dates[0] if sorted_dates else None
+        end_date = sorted_dates[-1] if sorted_dates else None
+        
+        # Calculate plan duration in weeks
+        plan_duration_weeks = 0
+        if start_date and end_date:
+            try:
+                from datetime import datetime
+                start = datetime.strptime(start_date, '%Y-%m-%d')
+                end = datetime.strptime(end_date, '%Y-%m-%d')
+                plan_duration_weeks = max(1, (end - start).days // 7 + 1)
+            except:
+                plan_duration_weeks = 0
+        
+        # Create plan summary
+        plan_info = {
+            "plan_id": "current_plan",
+            "start_date": start_date,
+            "end_date": end_date,
+            "duration_weeks": plan_duration_weeks,
+            "total_sessions": len(results['ids']),
+            "total_distance_km": round(total_distance, 1),
+            "session_breakdown": session_types,
+            "created_at": start_date,  # Use start date as creation date
+            "status": "active"
+        }
+        
+        return {
+            "status": "success",
+            "total_sessions": len(results['ids']),
+            "plans": [plan_info],
+            "message": f"Found training plan with {len(results['ids'])} sessions from {start_date} to {end_date}"
+        }
+        
+    except Exception as e:
+        print(f"Error in get_training_plan_stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving training plan stats: {str(e)}")
+
+@app.delete("/api/training-plan")
+async def delete_training_plan():
+    """Delete all training plan sessions from ChromaDB."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        # Get all sessions from the main collection
+        results = chroma_service.collection.get()
+        
+        if not results['ids']:
+            return {
+                "status": "success",
+                "message": "No training plans found to delete"
+            }
+        
+        # Delete all sessions
+        chroma_service.collection.delete(ids=results['ids'])
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {len(results['ids'])} training plan sessions"
+        }
+        
+    except Exception as e:
+        print(f"Error in delete_training_plan: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting training plan: {str(e)}")
+
+@app.delete("/api/rag-entry/{document_id}")
+async def delete_rag_entry(document_id: str):
+    """Delete a specific RAG entry from ChromaDB by document_id."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        # Get the RAG collection
+        rag_collection = chroma_service.client.get_collection("rag_knowledge")
+        
+        # Query for chunks with the specific document_id
+        results = rag_collection.get(where={"document_id": document_id})
+        
+        if not results['ids']:
+            raise HTTPException(status_code=404, detail=f"No RAG entry found with document_id: {document_id}")
+        
+        # Delete all chunks for this document
+        rag_collection.delete(ids=results['ids'])
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {len(results['ids'])} chunks for document {document_id}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in delete_rag_entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting RAG entry: {str(e)}")
