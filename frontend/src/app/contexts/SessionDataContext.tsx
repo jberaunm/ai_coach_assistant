@@ -256,7 +256,20 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
       console.log('Message type:', typeof messageText);
       console.log('Message length:', messageText.length);
       
-      // First check for analyser_agent completion messages (both JSON and text)
+      // First check for orchestrator_agent completion messages (both JSON and text)
+      if (typeof messageText === 'string' && messageText.includes('[ORCHESTRATOR_AGENT] FINISH:')) {
+        console.log('✅ ORCHESTRATOR_AGENT message detected:', messageText);
+        console.log('✅ Orchestrator agent completed, refreshing all data');
+        // Reset scheduling state to stop loading
+        setScheduling(false);
+        // Refresh both session and weekly data when orchestrator completes
+        const currentDate = date.toISOString().split('T')[0];
+        fetchSessionData(currentDate);
+        fetchWeeklyData();
+        return; // Don't process as JSON if it's an orchestrator_agent message
+      }
+      
+      // Then check for analyser_agent completion messages (both JSON and text)
       if (typeof messageText === 'string' && messageText.includes('[ANALYSER_AGENT] FINISH:')) {
         console.log('✅ ANALYSER_AGENT message detected:', messageText);
         if (messageText.includes('Segmentation') || messageText.includes('Insights') || messageText.includes('Analysis of activity') || messageText.includes('Segmentation Only') || messageText.includes('Successfully completed')) {
@@ -286,6 +299,18 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
       try {
         const data = JSON.parse(event.data);
         
+        // Check for orchestrator_agent completion in JSON messages (log_message format)
+        if (data.log_message && typeof data.log_message === 'string' && data.log_message.includes('[ORCHESTRATOR_AGENT] FINISH:')) {
+          console.log('✅ ORCHESTRATOR_AGENT message detected in JSON log_message:', data.log_message);
+          console.log('✅ Orchestrator agent completed, refreshing all data');
+          // Reset scheduling state to stop loading
+          setScheduling(false);
+          // Refresh both session and weekly data when orchestrator completes
+          const currentDate = date.toISOString().split('T')[0];
+          fetchSessionData(currentDate);
+          fetchWeeklyData();
+        }
+        
         // Check for analyser_agent completion in JSON messages (log_message format)
         if (data.log_message && typeof data.log_message === 'string' && data.log_message.includes('[ANALYSER_AGENT] FINISH:')) {
           console.log('✅ ANALYSER_AGENT message detected in JSON log_message:', data.log_message);
@@ -301,7 +326,19 @@ export function SessionDataProvider({ children, date, websocket }: SessionDataPr
           }
         }
         
-        // Also check for content field (fallback)
+        // Also check for content field (fallback) - orchestrator agent
+        if (data.content && typeof data.content === 'string' && data.content.includes('[ORCHESTRATOR_AGENT] FINISH:')) {
+          console.log('✅ ORCHESTRATOR_AGENT message detected in JSON content:', data.content);
+          console.log('✅ Orchestrator agent completed, refreshing all data');
+          // Reset scheduling state to stop loading
+          setScheduling(false);
+          // Refresh both session and weekly data when orchestrator completes
+          const currentDate = date.toISOString().split('T')[0];
+          fetchSessionData(currentDate);
+          fetchWeeklyData();
+        }
+        
+        // Also check for content field (fallback) - analyser agent
         if (data.content && typeof data.content === 'string' && data.content.includes('[ANALYSER_AGENT] FINISH:')) {
           console.log('✅ ANALYSER_AGENT message detected in JSON content:', data.content);
           if (data.content.includes('Segmentation') || data.content.includes('Insights') || data.content.includes('Analysis of activity') || data.content.includes('Segmentation Only') || data.content.includes('Successfully completed')) {

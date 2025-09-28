@@ -1,7 +1,6 @@
 from google.adk.agents import Agent
-from google.adk.tools.agent_tool import AgentTool
-
 from google.adk.agents import LlmAgent
+from google.adk.tools.agent_tool import AgentTool
 from google.adk.models.lite_llm import LiteLlm
 
 import os
@@ -17,12 +16,9 @@ def get_current_time():
 def get_current_datetime():
     return datetime.now().strftime("%H:%M")
 
-# from google.adk.tools import google_search  # Import the search tool
 from .tools import (
     create_event,
-    delete_event,
     edit_event,
-    get_current_time,
     list_events,
     get_activity_with_laps,
     get_weather_forecast,
@@ -35,9 +31,6 @@ from .tools import (
     mark_session_completed_by_date,
     get_weekly_sessions,
     write_activity_data,
-    plot_running_chart,
-    plot_running_chart_laps,
-    get_activity_by_id,
     segment_activity_by_pace,
     update_session_with_analysis,
     agent_log,
@@ -47,9 +40,9 @@ from .tools import (
     create_rag_chunks
 )
 
-planner_agent = Agent(
+planner_agent = LlmAgent(
     name="planner_agent",
-    #model="gemini-2.5-flash",
+    #model="gemini-2.5-flash-lite",
     model=LiteLlm(model="mistral/mistral-small-latest"),
     description=(
         "Agent that parses uploaded training plans and creates personalized training plans based on user goals, fitness level, and preferences."
@@ -111,7 +104,7 @@ planner_agent = Agent(
     The plan includes 3 long runs, 4 easy runs, 2 speed sessions, and 3 rest days."
 
     ## Main Workflow 2: Personalized Plan Creation
-    **CRITICAL**: Use this workflow when you receive user input data for creating a personalized training plan.
+    **CRITICAL**: Use this workflow when you receive user input data for creating a personalized training plan. You MUST go through all the steps in this workflow.
 
     ### Input Format
     This workflow expects user input in the format:
@@ -121,6 +114,7 @@ planner_agent = Agent(
     - **Weight**: Runner's weight in kg (optional)
     - **Average KMs per Week**: Current weekly volume (optional)
     - **5K Fastest Time**: Current 5K personal best in mm:ss format (optional)
+    - **Preferences**: Training preferences such as preferred days for long runs, time of day, indoor/outdoor preference, etc. (optional)
 
     ### Step 1: Log Start
     Call `agent_log("planner_agent", "start", "Starting personalized plan creation")`
@@ -131,6 +125,11 @@ planner_agent = Agent(
     - **Fitness Level**: Assess current fitness based on 5K time and weekly volume
     - **Training Load**: Calculate appropriate weekly volume progression
     - **Session Types**: Determine the right mix of easy runs, tempo runs, intervals, and long runs
+    - **Training Preferences**: Incorporate user preferences for:
+      - Long run scheduling (weekend vs weekday)
+      - Training time preferences (morning vs evening)
+      - Environment preferences (indoor vs outdoor)
+      - Social preferences (group vs solo training)
 
     ### Step 3: Retrieve RAG Knowledge (Optional)
     **CRITICAL**: The RAG knowledge base may not exist if the user hasn't uploaded research documents yet, if that's the case, proceed with standard training principles and best practices.
@@ -150,7 +149,7 @@ planner_agent = Agent(
     - For common mistakes: `retrieve_rag_knowledge("training mistakes overtraining injury prevention")`
     
     **RAG Knowledge Handling**:
-    - **If RAG knowledge is retrieved**: Incorporate specific research findings, cite relevant studies, and provide evidence-based recommendations
+    - **If RAG knowledge is retrieved**: Use this information as context for the training plan creation and proceed to next step.
     - **If RAG knowledge is empty or unavailable**: Proceed with standard training principles and mention that research-based insights can be added by uploading relevant documents to the RAG knowledge base
     - **Always check the status field**: If status is "error" or chunks array is empty, treat as no RAG knowledge available
 
@@ -162,6 +161,11 @@ planner_agent = Agent(
     - **Specific Workouts**: Detailed session descriptions with paces, distances, and instructions
     - **Race Preparation**: Tapering strategy if race date is provided
     - **Research-Based Insights**: Incorporate findings from RAG knowledge when available
+    - **Preference Integration**: Customize the plan based on user preferences:
+      - Schedule long runs on preferred days (weekend vs weekday)
+      - Suggest optimal training times based on user preference
+      - Include environment-specific recommendations (indoor vs outdoor)
+      - Consider social aspects (group vs solo training suggestions)
     
     **TRAINING PLAN STRUCTURE**:
     - **Phase 1 (Weeks 1-4)**: Base building - focus on easy runs and building aerobic fitness
@@ -222,9 +226,10 @@ planner_agent = Agent(
     - **End Date**: [race date - the final session is the actual race]
     - **Duration**: [X] weeks
     - **Total Sessions**: [X] training sessions + 1 race
+    - **Preferences**: [Include how preferences were incorporated, e.g., "Long runs scheduled on weekends as requested", "Morning training sessions as preferred"]
     
     [WARNING IF APPLICABLE]: Note that this [X]-week plan is shorter than the typically recommended [Y] weeks for [goal]. This is perfectly fine if you've been training consistently - many experienced runners successfully complete races with shorter preparation periods.
-    The plan includes [X] easy runs, [X] tempo runs, [X] interval sessions, and [X] long runs, progressing from [starting weekly volume] to [peak weekly volume] km per week, culminating in your race on [race date]."
+    The plan includes [X] easy runs, [X] tempo runs, [X] interval sessions, and [X] long runs, progressing from [starting weekly volume] to [peak weekly volume] km per week, culminating in your race on [race date]. The schedule has been customized based on your preferences for [specific preference details]."
 
     ## Error Handling
     If you encounter any issues in either workflow:
@@ -494,7 +499,6 @@ strava_agent = LlmAgent(
     tools=[get_activity_with_laps,
            mark_session_completed_by_date,
            write_activity_data,
-           plot_running_chart,
            agent_log],
 )
 
@@ -918,7 +922,7 @@ rag_agent = Agent(
 )
 
 root_agent = Agent(
-    name="ai_coach_agent",
+    name="orchestrator_agent",
     model="gemini-2.0-flash-exp",
     description="Agent to help with scheduling, calendar operations, and interactive running analysis workflows.",
     instruction=f"""
@@ -952,31 +956,29 @@ root_agent = Agent(
         c. Delegate to the `analyser_agent` to analyze the activity, specifically the Main Workflow 1: Segmentation of the activity for [date] if the session was completed.
     2. If [date] is in the future, you MUST complete the following step:
         a. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
-    3. Call `agent_log("ai_coach_agent", "finish", "Day overview for [date] completed")`
+    3. Call `agent_log("orchestrator_agent", "finish", "Day overview for [date] completed")`
         
     ### 2. Analysis of activity for [date]
     You have two distinct workflows for activity analysis:
     1. **Analysis workflow**: For segmenting activity data only
-    2. Call `agent_log("ai_coach_agent", "finish", "Analysis of activity for [date] completed")`
+    2. Call `agent_log("orchestrator_agent", "finish", "Analysis of activity for [date] completed")`
     
     ### 3. Insights for activity with [date], [RPE value] and [user's feedback]
     1. Delegate to the `analyser_agent` to generate insights for the activity with the requested date, RPE score, and user's feedback, as text.
     2. Return the confirmation of the completion of the insights analysis from the `analyser_agent`
-    3. Call `agent_log("ai_coach_agent", "finish", "Insights for activity with [date], [RPE value] and [user's feedback] completed")`
+    3. Call `agent_log("orchestrator_agent", "finish", "Insights for activity with [date], [RPE value] and [user's feedback] completed")`
 
     ### 4. RAG Document Processing: [file_path]
     1. **CRITICAL**: IMMEDIATELY delegate to the `rag_agent` with the message containing the file path
     2. The `rag_agent` will use its multi-modal capabilities to directly analyze the document as an attachment, categorize it (Training Plan or Session Analysis), and create RAG knowledge chunks
     3. The chunks will be stored in the knowledge base and enhance future training plans and session analysis
     4. Return confirmation of successful processing and integration
-    5. Call `agent_log("ai_coach_agent", "finish", "RAG Document Processing: [file_path] completed")`
+    5. Call `agent_log("orchestrator_agent", "finish", "RAG Document Processing: [file_path] completed")`
 
     ### 5. Uploaded Plan Processing: [file_path]
     1. **CRITICAL**: IMMEDIATELY delegate to the `planner_agent` with the message containing the file path
-    2. The `planner_agent` will use the `file_reader` tool to read the document, parse the training plan, and store it in the knowledge base
-    3. The training plan will be stored in the knowledge base and enhance future training plans and session analysis
-    4. Return confirmation of successful processing and integration
-    5. Call `agent_log("ai_coach_agent", "finish", "Uploaded Plan Processing: [file_path] completed")`
+    2. Return confirmation of successful processing and integration
+    5. Call `agent_log("orchestrator_agent", "finish", "Uploaded Plan Processing: [file_path] completed")`
 
     ### 6. Personalized Training Plans
     1. When a user wants to create a personalized training plan with their goals and fitness data, delegate to the `planner_agent` with the user's input data including:
@@ -987,7 +989,7 @@ root_agent = Agent(
         - Average KMs per Week (optional)
         - 5K Fastest Time in mm:ss format (optional)
     2. Return the confirmation of the completion of the personalized training plan creation from the `planner_agent`
-    3. Call `agent_log("ai_coach_agent", "finish", "Personalized Training Plans completed")`
+    3. Call `agent_log("orchestrator_agent", "finish", "Personalized Training Plans completed")`
     
     ## Feedback Guidelines for Completed Sessions
     When providing feedback for completed sessions, follow these principles:
@@ -1027,6 +1029,6 @@ root_agent = Agent(
         AgentTool(agent=planner_agent),
         AgentTool(agent=analyser_agent),
         AgentTool(agent=rag_agent),
-        get_weekly_sessions
+        agent_log
     ]
 )

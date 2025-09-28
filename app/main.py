@@ -45,7 +45,7 @@ class PrintInterceptor:
             '[STRAVA_AGENT]',
             '[ANALYSER_AGENT]',
             '[RAG_AGENT]',
-            '[AI_COACH_AGENT]',
+            '[ORCHESTRATOR_AGENT]',
             '[FileReader_tool]',
             '[CalendarAPI_tool]',
             '[WeatherAPI_tool]',

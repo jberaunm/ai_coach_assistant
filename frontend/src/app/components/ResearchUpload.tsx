@@ -362,7 +362,7 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "450px" }}>
       {/* Upload Section */}
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <h2 style={{ 
@@ -522,17 +522,20 @@ export default function ResearchUpload({ websocket }: ResearchUploadProps) {
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", flex: 1, minWidth: 0 }}>
                     {getStatusIcon(file.status)}
                     <span style={{ 
                       fontSize: "14px", 
                       fontWeight: "500",
-                      color: file.status === 'error' ? '#ef4444' : file.status === 'processing' ? '#3b82f6' : '#1e293b'
+                      color: file.status === 'error' ? '#ef4444' : file.status === 'processing' ? '#3b82f6' : '#1e293b',
+                      wordBreak: "break-all",
+                      overflowWrap: "break-word",
+                      lineHeight: "1.4"
                     }}>
                       {file.filename}
                     </span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                     <span style={{ 
                       fontSize: "12px", 
                       color: "#6b7280"

@@ -10,6 +10,7 @@ interface TrainingPlan {
   weight?: string;
   avgKmsPerWeek?: string;
   fastest5kTime?: string;
+  preferences?: string;
   createdAt: string;
   status: 'creating' | 'completed' | 'error';
   planDetails?: {
@@ -135,6 +136,7 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
   const [weight, setWeight] = useState<string>("");
   const [avgKmsPerWeek, setAvgKmsPerWeek] = useState<string>("");
   const [fastest5kTime, setFastest5kTime] = useState<string>("");
+  const [preferences, setPreferences] = useState<string>("");
 
   const goalPlanOptions = [
     "General Fitness",
@@ -144,6 +146,7 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
     "Marathon",
     "Ultra-Marathon",
   ];
+
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -195,6 +198,7 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
     if (plan.weight) details.push(`Weight: ${plan.weight}kg`);
     if (plan.avgKmsPerWeek) details.push(`Weekly Volume: ${plan.avgKmsPerWeek}km`);
     if (plan.fastest5kTime) details.push(`5K Time: ${plan.fastest5kTime}`);
+    if (plan.preferences) details.push(`Preferences: ${plan.preferences}`);
     
     return details.join(' • ');
   };
@@ -315,6 +319,7 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
       weight,
       avgKmsPerWeek,
       fastest5kTime,
+      preferences,
       createdAt: new Date().toISOString(),
       status: 'creating'
     };
@@ -329,7 +334,8 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
     ${age ? `Age: ${age}` : ''}
     ${weight ? `Weight: ${weight} kg` : ''}
     ${avgKmsPerWeek ? `Average KMs per Week: ${avgKmsPerWeek}` : ''}
-    ${fastest5kTime ? `5K Fastest Time: ${fastest5kTime}` : ''}`;
+    ${fastest5kTime ? `5K Fastest Time: ${fastest5kTime}` : ''}
+    ${preferences ? `Preferences: ${preferences}` : ''}`;
 
     console.log("Creating personalized plan with:", {
       goalPlan,
@@ -337,7 +343,8 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
       age,
       weight,
       avgKmsPerWeek,
-      fastest5kTime
+      fastest5kTime,
+      preferences
     });
 
     // Send the message via WebSocket
@@ -634,8 +641,8 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
               </div>
             </div>
 
-            {/* Third Row: 5K Time and Create Button */}
-            <div style={{ display: "flex", gap: "16px", alignItems: "end" }}>
+            {/* Third Row: 5K Time and Preferences */}
+            <div style={{ display: "flex", gap: "16px" }}>
               <div style={{ flex: 1 }}>
                 <label style={{ 
                   display: "block", 
@@ -661,25 +668,53 @@ export default function TrainingPlan({ websocket }: TrainingPlanProps) {
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <button
-                  onClick={handleCreatePersonalizedPlan}
-                  disabled={!goalPlan}
+                <label style={{ 
+                  display: "block", 
+                  marginBottom: "8px", 
+                  fontSize: "14px", 
+                  fontWeight: "500",
+                  color: "#374151"
+                }}>
+                  Training Preferences
+                </label>
+                <textarea
+                  value={preferences}
+                  onChange={(e) => setPreferences(e.target.value)}
+                  placeholder="e.g., Weekend long runs, morning sessions, outdoor training..."
+                  rows={2}
                   style={{
                     width: "100%",
-                    padding: "12px 24px",
-                    backgroundColor: goalPlan ? "#3b82f6" : "#9ca3af",
-                    color: "white",
-                    border: "none",
+                    padding: "8px 12px",
+                    border: "1px solid #d1d5db",
                     borderRadius: "6px",
                     fontSize: "14px",
-                    fontWeight: "500",
-                    cursor: goalPlan ? "pointer" : "not-allowed",
-                    transition: "background-color 0.2s ease"
+                    resize: "vertical",
+                    minHeight: "60px",
+                    fontFamily: "inherit"
                   }}
-                >
-                  Create Personalized Plan
-                </button>
+                />
               </div>
+            </div>
+
+            {/* Fourth Row: Create Button */}
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button
+                onClick={handleCreatePersonalizedPlan}
+                disabled={!goalPlan}
+                style={{
+                  padding: "12px 48px",
+                  backgroundColor: goalPlan ? "#3b82f6" : "#9ca3af",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: goalPlan ? "pointer" : "not-allowed",
+                  transition: "background-color 0.2s ease"
+                }}
+              >
+                Create Personalized Plan
+              </button>
             </div>
           </div>
         </div>
