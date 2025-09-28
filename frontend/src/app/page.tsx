@@ -144,7 +144,7 @@ export default function Home() {
         </SessionDataProvider>
         <div className="third-column">
           <div className="stat-card agent-flow-card">
-            <h1 style={{ marginBottom: 2 }}>AI Agent Flow</h1>
+            <h1 style={{ marginBottom: 2 }}>Agentic Real-time visualisation</h1>
             <AgentFlowDiagramReactFlow websocket={websocket} />
           </div>
           <div className="stat-card">

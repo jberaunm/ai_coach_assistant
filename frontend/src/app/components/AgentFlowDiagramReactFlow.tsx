@@ -18,38 +18,38 @@ import type { Node as RFNode } from 'reactflow';
 const RootNode: React.FC<{ data: { label: string } }> = ({ data }) => {
   return (
     <div style={{ 
-      background: '#cc785c', 
+      background: '#0000ffff', 
       color: '#fff', 
       borderRadius: 8, 
-      padding: 8, 
+      padding: 9, 
       fontWeight: 600, 
       fontSize: 24, 
-      width: 230,
+      width: 260,
       position: 'relative'
     }}>
       <Handle
         type="source"
         position={Position.Top}
         id="root-top"
-        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+        style={{ background: 'transparent', border: '2px solid #0000ffff' }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="root-right"
-        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+        style={{ background: 'transparent', border: '2px solid #0000ffff' }}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="root-bottom"
-        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+        style={{ background: 'transparent', border: '2px solid #0000ffff' }}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="root-left"
-        style={{ background: '#fff', border: '2px solid #4e9cea' }}
+        style={{ background: 'transparent', border: '2px solid #0000ffff' }}
       />
       {data.label}
     </div>
@@ -221,16 +221,16 @@ const nodeTypes: NodeTypes = {
     { 
       id: 'root', 
       position: { x: -100, y: 190 }, 
-      data: { label: 'Coach Agent\nGemini-Flash-exp' }, 
+      data: { label: 'Orchestrator Agent\nGemini-Flash-exp' }, 
       type: 'rootNode', // Use custom node type
-      style: { background: '#cc785c', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 240 }
+      style: { background: '#0000ffff', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 24, width: 270 }
       // Remove sourcePosition and targetPosition as they're now handled by custom handles
     },
     { 
       id: 'planner', 
       position: { x: 150, y: -30 }, 
       data: { label: 'Planner Agent\nMistral-Small' }, 
-      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 230 }, 
+      style: { background: '#0000ffff', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 230 }, 
       sourcePosition: Position.Right, 
       targetPosition: Position.Left 
     },
@@ -238,7 +238,7 @@ const nodeTypes: NodeTypes = {
       id: 'scheduler', 
       position: { x: 210, y: 80 }, 
       data: { label: 'Scheduler Agent\nMistral-Small' }, 
-      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 240 }, 
+      style: { background: '#0000ffff', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 240 }, 
       sourcePosition: Position.Right, 
       targetPosition: Position.Left 
     },
@@ -246,7 +246,7 @@ const nodeTypes: NodeTypes = {
       id: 'strava', 
       position: { x: 240, y: 190 }, 
       data: { label: 'Strava Agent\nMistral-Small' }, 
-      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 230 }, 
+      style: { background: '#0000ffff', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 230 }, 
       sourcePosition: Position.Right, 
       targetPosition: Position.Left 
     },
@@ -254,7 +254,7 @@ const nodeTypes: NodeTypes = {
       id: 'analyser', 
       position: { x: 210, y: 300 }, 
       data: { label: 'Analyser Agent\nMistral-Small' }, 
-      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 250 },
+      style: { background: '#0000ffff', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 250 },
       sourcePosition: Position.Right, 
       targetPosition: Position.Left 
     },
@@ -262,7 +262,7 @@ const nodeTypes: NodeTypes = {
       id: 'rag_agent', 
       position: { x: 150, y: 410 }, 
       data: { label: 'RAG Agent\nGemini-2.5-pro' }, 
-      style: { background: '#1565c0', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 220 }, 
+      style: { background: '#0000ffff', color: '#fff', borderRadius: 8, padding: 8, fontWeight: 600, fontSize: 23, width: 220 }, 
       sourcePosition: Position.Right, 
       targetPosition: Position.Left  
     },
@@ -315,7 +315,7 @@ const nodeTypes: NodeTypes = {
       sourceHandle: 'root-top', // Use the top handle from custom root node
       targetHandle: 'left',
       animated: false, 
-      style: { stroke: '#1565c0', strokeWidth: 4 } 
+      style: { stroke: '#0000ffff', strokeWidth: 4 } 
     },
     { 
       id: 'e2', 
@@ -324,7 +324,7 @@ const nodeTypes: NodeTypes = {
       sourceHandle: 'root-right', // Use the right handle from custom root node
       targetHandle: 'left',
       animated: false, 
-      style: { stroke: '#1565c0', strokeWidth: 4 } 
+      style: { stroke: '#0000ffff', strokeWidth: 4 } 
     },
     { 
       id: 'e3', 
@@ -333,7 +333,7 @@ const nodeTypes: NodeTypes = {
       sourceHandle: 'root-right', // Use the right handle from custom root node
       targetHandle: 'left',
       animated: false, 
-      style: { stroke: '#1565c0', strokeWidth: 4 } 
+      style: { stroke: '#0000ffff', strokeWidth: 4 } 
     },
     { 
       id: 'e4', 
@@ -342,7 +342,7 @@ const nodeTypes: NodeTypes = {
       sourceHandle: 'root-right', // Use the right handle from custom root node
       targetHandle: 'left',
       animated: false, 
-      style: { stroke: '#1565c0', strokeWidth: 4 } 
+      style: { stroke: '#0000ffff', strokeWidth: 4 } 
     },
     { 
       id: 'e5', 
@@ -351,7 +351,7 @@ const nodeTypes: NodeTypes = {
       sourceHandle: 'root-bottom', // Use the right handle from custom root node
       targetHandle: 'left',
       animated: false, 
-      style: { stroke: '#1565c0', strokeWidth: 4 } 
+      style: { stroke: '#0000ffff', strokeWidth: 4 } 
     },
     { 
       id: 'e6', 
@@ -572,6 +572,12 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
     } else if (logMessage.includes('[RAG_AGENT] FINISH:')) {
       addLog('RAG Agent finished', 'agent_finish', 'RAG Agent');
       handleAgentFinish('rag_agent', 'RAG Agent');
+    } else if (logMessage.includes('[ORCHESTRATOR_AGENT] START:')) {
+      addLog('Orchestrator Agent started', 'agent_start', 'Orchestrator Agent');
+      handleAgentStart('orchestrator_agent', 'Orchestrator Agent', ['e5','e12']);
+    } else if (logMessage.includes('[ORCHESTRATOR_AGENT] FINISH:')) {
+      addLog('Orchestrator Agent finished', 'agent_finish', 'Orchestrator Agent');
+      handleAgentFinish('orchestrator_agent', 'Orchestrator Agent');
     }
     
     // Individual cases for each tool START events with duration
@@ -902,7 +908,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
   const connectionStatus = getConnectionStatus();
 
   return (
-    <div className="stat-card agent-flow-card" style={{ width: 440, height: 420, padding: '2px 0 2px 0', paddingLeft: 0, display: 'flex', flexDirection: 'column' }}>
+    <div className="stat-card agent-flow-card" style={{ width: 450, height: 460, padding: '2px 0 2px 0', paddingLeft: 0, display: 'flex', flexDirection: 'column' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -929,7 +935,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
         borderTop: '1px solid #e2e8f0', 
         padding: '8px 12px', 
         backgroundColor: '#f8fafc',
-        height: '100px',
+        height: '140px',
         flexShrink: 0
       }}>
         {/* Log Viewer Header with Single Status */}
@@ -964,7 +970,7 @@ export default function AgentFlowDiagramReactFlow({ websocket }: AgentFlowDiagra
 
         {/* Log Entries */}
         <div style={{ 
-          height: '60px', 
+          height: '100px', 
           overflowY: 'auto', 
           backgroundColor: '#ffffff',
           borderRadius: '6px',
