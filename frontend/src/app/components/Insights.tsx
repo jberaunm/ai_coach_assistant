@@ -129,13 +129,14 @@ export default function Insights({ date }: InsightsProps) {
   const coachFeedback = sessionData?.metadata?.coach_feedback;
   
   // State for RPE and feedback form
-  const [rpeValue, setRpeValue] = useState(5);
+  const [rpeValue, setRpeValue] = useState(3);
   const [feedbackText, setFeedbackText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // RPE descriptions
+  // RPE descriptions (0-5 scale)
   const rpeDescriptions = {
+    0: "No effort - resting",
     1: "Very light effort like walking", 
     2: "Light effort, comfortable pace where you can easily hold a conversation",
     3: "Moderate effort, breathing is heavier but you can still talk",
@@ -234,11 +235,11 @@ export default function Insights({ date }: InsightsProps) {
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                     <span style={{ fontSize: "12px", color: "#666" }}>0</span>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>RPE: {rpeValue}</span>
-                    <span style={{ fontSize: "12px", color: "#666" }}>10</span>
+                    <span style={{ fontSize: "12px", color: "#666" }}>5</span>
                   </div>
                   <input
                     type="range"
-                    min="1"
+                    min="0"
                     max="5"
                     value={rpeValue}
                     onChange={(e) => setRpeValue(parseInt(e.target.value))}
@@ -246,7 +247,7 @@ export default function Insights({ date }: InsightsProps) {
                       width: "100%",
                       height: "6px",
                       borderRadius: "3px",
-                      background: `linear-gradient(to right, #4caf50 0%, #4caf50 ${rpeValue * 10}%, #ddd ${rpeValue * 10}%, #ddd 100%)`,
+                      background: `linear-gradient(to right, #4caf50 0%, #4caf50 ${rpeValue * 20}%, #ddd ${rpeValue * 20}%, #ddd 100%)`,
                       outline: "none",
                       cursor: "pointer"
                     }}

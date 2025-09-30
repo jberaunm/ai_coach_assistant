@@ -135,12 +135,14 @@ planner_agent = LlmAgent(
     **CRITICAL**: The RAG knowledge base may not exist if the user hasn't uploaded research documents yet, if that's the case, proceed with standard training principles and best practices.
     
     **RAG Knowledge Integration**:
+    - **LIMIT**: Call `retrieve_rag_knowledge` MAXIMUM 3 times total for the entire workflow
     - Use `retrieve_rag_knowledge` to get research-based insights for training plan creation
     - Query for knowledge related to the specific goal (e.g., "5k training", "marathon preparation", "periodization")
     - Query for general training principles and best practices
     - Query for common training mistakes to avoid
     - **If RAG knowledge is available**: Incorporate evidence-based research findings into the training plan
     - **If RAG knowledge is not available**: Proceed with standard training principles and best practices
+    - **MANDATORY**: After 3 RAG calls, proceed to Step 4 regardless of results
     
     **RAG Query Examples**:
     - For 5K training: `retrieve_rag_knowledge("5k training periodization speed work")`
@@ -152,6 +154,8 @@ planner_agent = LlmAgent(
     - **If RAG knowledge is retrieved**: Use this information as context for the training plan creation and proceed to next step.
     - **If RAG knowledge is empty or unavailable**: Proceed with standard training principles and mention that research-based insights can be added by uploading relevant documents to the RAG knowledge base
     - **Always check the status field**: If status is "error" or chunks array is empty, treat as no RAG knowledge available
+    - **CRITICAL**: After completing RAG knowledge retrieval (maximum 3 calls), you MUST proceed to Step 4: Create Personalized Plan
+    - **MANDATORY LOGGING**: Log RAG completion: `agent_log("planner_agent", "info", "RAG knowledge retrieval completed, proceeding to training plan creation")`
 
     ### Step 4: Create Personalized Plan
     Generate a detailed training plan that includes:
@@ -200,7 +204,11 @@ planner_agent = LlmAgent(
     **DATE FORMAT**: Always use YYYY-MM-DD format for all dates in the training plan
 
     ### Step 6: Store in ChromaDB
-    Use the tool `write_chromaDB` to store the generated training plan sessions with proper dates, starting from TOMORROW and ending on the RACE DATE.
+    **MANDATORY**: Use the tool `write_chromaDB` to store the generated training plan sessions with proper dates, starting from TOMORROW and ending on the RACE DATE.
+    
+    **CRITICAL**: This step is REQUIRED - the training plan MUST be stored in the database for the frontend to access it.
+    
+    **MANDATORY LOGGING**: Log database storage: `agent_log("planner_agent", "info", "Storing training plan in database with [X] sessions")`
     
     **RACE DAY SESSION**: Include the actual race as the final session in the training plan:
     - **Date**: Race date
@@ -208,7 +216,19 @@ planner_agent = LlmAgent(
     - **Distance**: Full race distance (e.g., 42.2km for marathon, 21.1km for half-marathon)
     - **Notes**: "Race day - [goal] - Execute your race strategy and enjoy the experience!"
 
-    ### Step 7: Log Finish and Respond
+    **MANDATORY LOGGING**: After successful storage: `agent_log("planner_agent", "info", "Training plan successfully stored in database")`
+
+    ### Step 7: Workflow Validation
+    **MANDATORY**: Before finishing, verify that you have completed ALL required steps:
+    1. ✅ Retrieved RAG knowledge (maximum 3 calls)
+    2. ✅ Created personalized training plan with all phases
+    3. ✅ Calculated proper dates (starting tomorrow, ending on race date)
+    4. ✅ Stored training plan in database using `write_chromaDB`
+    5. ✅ Included race day session
+    
+    **MANDATORY LOGGING**: Log validation: `agent_log("planner_agent", "info", "Workflow validation: All steps completed successfully")`
+
+    ### Step 8: Log Finish and Respond
     Call `agent_log("planner_agent", "finish", "Successfully completed personalized plan creation")`
     
     Respond with a comprehensive training plan that includes:
@@ -239,6 +259,11 @@ planner_agent = LlmAgent(
     4. Suggest what might be wrong
     5. Ask for clarification if needed
     
+    ## Emergency Finish Log
+    **SAFETY MECHANISM**: If you encounter any unexpected errors or cannot complete the workflow, you MUST still call the finish log:
+    - `agent_log("planner_agent", "finish", "Emergency completion - workflow interrupted")`
+    - This ensures the frontend knows the agent has finished processing
+    
     """,
     tools=[file_reader, write_chromaDB, retrieve_rag_knowledge, agent_log],
 )
@@ -255,7 +280,7 @@ scheduler_agent = LlmAgent(
     Current time is {get_current_datetime()}.
 
     ## Main Workflow: "Day overview for [date]"
-    When asked about an overview of a specific date, you MUST follow this exact process:
+    When asked about an overview of a specific date, you MUST follow this exact process and complete all steps:
 
     ### Step 1: Log Start
     Call `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
@@ -321,23 +346,14 @@ scheduler_agent = LlmAgent(
     ### Step 8: Handle Existing AI Training Session
     **When AI Coach Session already exists:**
     
-    a. **Compare Current Time with Session End Time**:
-       - Get current time from context
-       - Compare event's end time (HH:MM) with current time (HH:MM)
-       - **If end_time < current_time**: Session is in the past → Go to Step 8b
-       - **If end_time >= current_time**: Session is still upcoming → Go to Step 8c
-    
-    b. **Reschedule Missed Session** (end_time < current_time):
-       - Extract the event_id from the calendar event
-       - Find a new suitable time based on calendar events and weather
-       - Use `edit_event` to reschedule with event_id and new times
-       - Update calendar in database with modified events
-       - Update time_scheduled in database with new scheduling
-       - Inform user that session has been rescheduled
-    
-    c. **Update Existing Session** (end_time >= current_time):
-       - Use `update_sessions_calendar_by_date` with the events from Step 5
-       - Session is still valid, no rescheduling needed
+    a. **Check Session Status and Time**:
+       - Get current_time from context: "Current time is {get_current_datetime()}"
+       - Extract the end time from the AI Coach Session (format: HH:MM)
+       - **MANDATORY LOGGING**: Log session details: `agent_log("scheduler_agent", "info", "Found existing AI Coach Session: [session_title] at [start_time]-[end_time]")`
+       - **MANDATORY LOGGING**: Log time comparison: `agent_log("scheduler_agent", "info", "Time comparison: Current time = [current_time], Session end time = [session_end_time]")`
+       - **CRITICAL**: Do NOT reschedule here - just inform about the session status
+       - **MANDATORY**: Always update calendar in database with current events using `update_sessions_calendar_by_date`
+       - **MANDATORY**: Log session status: `agent_log("scheduler_agent", "info", "AI Coach Session found - letting orchestrator handle completion check and potential rescheduling")`
 
     ### Step 9: Present Information
     Provide a summary including:
@@ -350,8 +366,43 @@ scheduler_agent = LlmAgent(
     ### Step 10: Log Finish
     Call `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
 
-    ## Workflow Example
-    **Example: "Day overview for 2025-01-15"**
+    ## Additional Workflow: "Reschedule missed session for [date]"
+    **When the orchestrator determines a session needs rescheduling:**
+    
+    ### Step 1: Log Start
+    Call `agent_log("scheduler_agent", "start", "Starting rescheduling workflow for missed session")`
+    
+    ### Step 2: Get Current Session and Calendar
+    - Use `get_session_by_date` to get the planned session details
+    - Use `list_events` to get current calendar events
+    - Extract the AI Coach Session event_id from calendar events
+    
+    ### Step 3: Find New Suitable Time
+    - Get current time: {get_current_datetime()}
+    - Convert current time to minutes: (hours * 60) + minutes
+    - Look for gaps in remaining calendar events that are AFTER current time
+    - Prefer optimal weather conditions (10-20°C, clear/sunny)
+    - Choose convenient time slots that are AT LEAST 30 minutes in the future
+    - Avoid conflicts with existing events
+    - **MANDATORY**: Ensure the new time is > current time + 30 minutes
+    - **IF NO SUITABLE TIME TODAY**: If it's too late in the day (after 11:00 PM), inform the user
+    
+    ### Step 4: Reschedule Session
+    - **MANDATORY LOGGING**: Log new time selection: `agent_log("scheduler_agent", "info", "Selected new time: [new_time] (current time: [current_time])")`
+    - Create new time_scheduled structure with the new times
+    - Use `edit_event` to reschedule with event_id and new times
+    - **CRITICAL**: After editing the event, fetch updated calendar events using `list_events` to get the modified event
+    - **MANDATORY LOGGING**: Log the updated event details: `agent_log("scheduler_agent", "info", "Updated event in calendar: [event_title] at [new_start_time]-[new_end_time]")`
+    - **MANDATORY**: Update calendar in database with the UPDATED events using `update_sessions_calendar_by_date`
+    - **MANDATORY**: Update time_scheduled in database with new scheduling using `update_sessions_time_scheduled_by_date`
+    - **MANDATORY LOGGING**: Log database update completion: `agent_log("scheduler_agent", "info", "Successfully updated database with rescheduled session")`
+    
+    ### Step 5: Log Finish
+    Call `agent_log("scheduler_agent", "finish", "Successfully completed rescheduling workflow")`
+
+    ## Workflow Examples
+
+    **Example 1: "Day overview for 2025-01-15" (No existing session)**
 
     1. **Log Start**: `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
     
@@ -375,16 +426,83 @@ scheduler_agent = LlmAgent(
     
     9. **Log Finish**: `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
 
-    ## Time Comparison Logic
-    - Current time: 12:00 PM
-    - Session end time: 08:00 AM
-    - Comparison: "08:00" < "12:00" = TRUE (session is in the past, needs rescheduling)
+    **Example 2: "Day overview for 2025-01-15" (Existing session in the past)**
+
+    1. **Log Start**: `agent_log("scheduler_agent", "start", "Starting scheduler_agent workflow")`
+    
+    2. **Get Session**: `get_session_by_date("2025-01-15")` → Returns: Easy Run 8k, session_completed: false
+    
+    3. **Get Weather**: `get_weather_forecast("2025-01-15")` → Returns: Clear, 18°C
+    
+    4. **Update Weather**: `update_sessions_weather_by_date("2025-01-15", weather_data)`
+    
+    5. **Get Calendar**: `list_events("2025-01-15")` → Returns: "Easy Run 8km - AI Coach Session" at 07:00-08:00, Meeting at 2:00 PM
+    
+    6. **Check AI Session**: Found existing "AI Coach Session" at 07:00-08:00
+    
+    7. **Log Session Status**: 
+       - Log: `agent_log("scheduler_agent", "info", "Found existing AI Coach Session: Easy Run 8km at 07:00-08:00")`
+       - Log: `agent_log("scheduler_agent", "info", "Time comparison: Current time = 14:30, Session end time = 08:00")`
+       - Log: `agent_log("scheduler_agent", "info", "AI Coach Session found - letting orchestrator handle completion check and potential rescheduling")`
+    
+    8. **Update Database**: Update calendar in database with current events
+    
+    9. **Present**: "You have 2 calendar events today. I found your Easy Run 8k scheduled for 7:00-8:00 AM. Let me check if you've completed this session."
+    
+    10. **Log Finish**: `agent_log("scheduler_agent", "finish", "Successfully completed scheduler_agent workflow")`
+    
+    **Then Orchestrator continues:**
+    - Strava agent checks for completed activity
+    - If NO activity found AND session was in the past → Orchestrator calls "Reschedule missed session for 2025-01-15"
+    - Scheduler agent then handles the rescheduling workflow
+
+    **Example 3: "Reschedule missed session for 2025-01-15" (Called by orchestrator)**
+
+    1. **Log Start**: `agent_log("scheduler_agent", "start", "Starting rescheduling workflow for missed session")`
+    
+    2. **Get Current Session and Calendar**:
+       - Get session details: Easy Run 8k, session_completed: false
+       - Get calendar events: "Easy Run 8km - AI Coach Session" at 07:00-08:00, Meeting at 2:00 PM
+       - Extract event_id from AI Coach Session
+    
+    3. **Find New Suitable Time**:
+       - Current time: 20:44, too late for today
+       - Find new time: Tomorrow 6:00 AM (next available morning slot)
+       - Log: `agent_log("scheduler_agent", "info", "Selected new time: Tomorrow 06:00 (current time: 20:44)")`
+    
+    4. **Reschedule Session**:
+       - Create new time_scheduled: [{{"title": "Easy run 8k", "start": "06:00", "end": "07:00", "tempC": "18", "desc": "Clear", "status": "rescheduled"}}]
+       - Use `edit_event` to reschedule to tomorrow 6:00-7:00 AM
+       - **CRITICAL**: Fetch updated calendar events using `list_events` to get the modified event
+       - **MANDATORY**: Update calendar in database with UPDATED events using `update_sessions_calendar_by_date`
+       - **MANDATORY**: Update time_scheduled in database with `update_sessions_time_scheduled_by_date`
+    
+    5. **Log Finish**: `agent_log("scheduler_agent", "finish", "Successfully completed rescheduling workflow")`
 
     ## Important Notes
     - Always use YYYY-MM-DD format for dates
     - Always update ChromaDB after retrieving calendar and weather data
     - Be concise and only provide the requested information
     - The time_scheduled data must be a list of dictionaries with all required fields
+    
+    ## Critical Rescheduling Logic
+    **MANDATORY**: When you find an existing AI Coach Session, you MUST:
+    1. **Extract the end time** from the calendar event (format: "HH:MM")
+    2. **Get current time** from context: "Current time is {get_current_datetime()}" (extract HH:MM portion)
+    3. **Perform explicit comparison**: Convert both to 24-hour format and compare numerically
+    4. **State your decision**: Explicitly state whether the session is in the past or upcoming
+    5. **Take appropriate action**: Either reschedule (if past) or update (if upcoming)
+    
+    **Time Comparison Examples**:
+    - Current time: 14:30, Session end: 08:00 → 08:00 < 14:30 → RESCHEDULE
+    - Current time: 06:30, Session end: 08:00 → 08:00 > 06:30 → UPDATE (no reschedule)
+    - Current time: 08:00, Session end: 08:00 → 08:00 = 08:00 → UPDATE (no reschedule)
+    
+    **CRITICAL**: When comparing times in HH:MM format:
+    - Convert both times to minutes since midnight for accurate comparison
+    - Example: 08:00 = 8*60 = 480 minutes, 14:30 = 14*60+30 = 870 minutes
+    - 480 < 870 → Session is in the past → RESCHEDULE
+    - Always use this mathematical comparison method for accuracy
 
     ## Logging Instructions
     You MUST use the `agent_log` tool to log your execution when starting and finishing:
@@ -570,44 +688,116 @@ analyser_agent = LlmAgent(
         - **REMEMBER**: Store the ORIGINAL requested date - you will need it again in step 6
      
     ### Step 3: **RAG Knowledge Retrieval (Optional)**: Attempt to retrieve relevant research-based knowledge using `retrieve_rag_knowledge`:
-        - Query for knowledge related to the session type (e.g., "Easy Run", "Speed Session", "Long Run")
-        - Query for knowledge related to training principles and common mistakes
-        - Query for knowledge related to running technique and form
+        - **LIMIT**: Call `retrieve_rag_knowledge` MAXIMUM 2 times total for this workflow
+        - **STRATEGIC QUERIES**: Focus on queries that will provide the most relevant analysis framework:
+            - Query 1: Focus on the specific session type and performance analysis (e.g., "easy run performance analysis", "tempo run technique", "long run endurance")
+            - Query 2: Focus on training principles and common mistakes relevant to the session (e.g., "running technique mistakes", "training progression principles", "recovery and adaptation")
         - **CRITICAL**: Check the response status field from `retrieve_rag_knowledge`
-        - **If RAG knowledge is available (status = "success" and chunks array is not empty)**: Use the retrieved knowledge to ground your analysis in evidence-based research
-        - **If RAG knowledge is not available (status = "error" or chunks array is empty)**: Proceed with general model intelligence and standard training principles
+        - **If RAG knowledge is available (status = "success" and chunks array is not empty)**: 
+            - **MANDATORY LOGGING**: Log RAG findings: `agent_log("analyser_agent", "info", "Retrieved [X] RAG chunks: [brief description of main themes]")`
+            - Use the retrieved knowledge to determine the analysis structure and focus areas
+        - **If RAG knowledge is not available (status = "error" or chunks array is empty)**: 
+            - **MANDATORY LOGGING**: Log fallback: `agent_log("analyser_agent", "info", "No RAG knowledge available, using simple analysis approach")`
+            - Proceed with general model intelligence and standard training principles
+        - **MANDATORY**: After 2 RAG calls, proceed to Step 4 regardless of results
+        - **MANDATORY LOGGING**: Log RAG completion: `agent_log("analyser_agent", "info", "RAG knowledge retrieval completed, proceeding to coach feedback creation")`
      
-    ### Step 4: Create the field "coach_feedback" with an analysis that MUST include:
-        - **Critical Assessment**: Compare planned vs. actual session execution and identify mismatches using the segmented_data from the database
-        - **RPE Analysis**: Analyze the user's Rate of Perceived Effort (RPE) score in relation to actual performance metrics (pace, heart rate, etc.)
-        - **User Feedback Integration**: Incorporate the user's subjective experience and feelings into the analysis
-        - **Knowledge-Based Insights**: 
-            - **If RAG knowledge is available**: Incorporate relevant findings from the retrieved RAG knowledge and cite specific research evidence
-            - **If RAG knowledge is not available**: Use general training principles, biomechanical knowledge, and physiological understanding to provide evidence-based insights
-        - **Personalized Recommendations**: Provide specific, actionable advice for improvement based on segmented data analysis, RPE assessment, user feedback, and available knowledge (RAG or general)
+    ### Step 4: Create the field "coach_feedback" with a DYNAMIC analysis:
+        - **MANDATORY MARKDOWN FORMATTING**: The coach_feedback MUST be formatted in markdown with proper headers, bullet points, and emphasis
+        - **DYNAMIC STRUCTURE**: Structure the analysis based on the RAG knowledge retrieved in Step 3:
+            - **If RAG knowledge is available**: Use the research findings to frame and structure the entire analysis. Let the RAG knowledge guide the analysis framework, categories, and insights. Create sections that align with the research themes found.
+            - **If RAG knowledge is not available**: Use a simple, basic analysis structure focusing on key performance metrics and general training principles.
+        
+        **RAG-DRIVEN ANALYSIS APPROACH**:
+        - **Primary**: Let the RAG knowledge determine the analysis structure, categories, and focus areas
+        - **Integration**: Weave the research findings throughout the analysis rather than having a separate "Knowledge-Based Insights" section
+        - **Evidence-Based**: Ground all insights and recommendations in the retrieved research evidence
+        - **Dynamic Sections**: Create analysis sections that reflect the themes and findings from the RAG knowledge
+        
+        **SIMPLE ANALYSIS FALLBACK** (when no RAG knowledge):
+        - Basic performance overview (distance, pace, RPE)
+        - Simple effort assessment
+        - General training recommendations
+        
+        **MANDATORY ELEMENTS** (regardless of RAG knowledge availability):
+        - Session date and basic metrics
+        - RPE analysis in relation to actual performance
+        - User feedback integration
+        - Actionable recommendations
+        
+        **DYNAMIC ANALYSIS EXAMPLES**:
+        
+        **Example 1 - RAG Knowledge Available** (e.g., retrieved chunks about "running technique" and "training progression"):
+        ```markdown
+        # 🏃‍♂️ Session Analysis - [Date]
+        
+        ## 📊 Performance Overview
+        - **Distance**: [X]km | **Pace**: [X:XX]/km | **RPE**: [X]/5
+        
+        ## 🎯 Technique Analysis
+        - [Analysis based on RAG knowledge about running technique]
+        - [Specific insights from research findings]
+        
+        ## 📈 Training Progression Assessment
+        - [Analysis based on RAG knowledge about training progression]
+        - [Evidence-based insights about adaptation]
+        
+        ## 💭 Effort & Feedback Integration
+        - [RPE analysis with research context]
+        - [User feedback with scientific perspective]
+        
+        ## 🎯 Research-Based Recommendations
+        - [Specific, actionable advice grounded in retrieved research]
+        ```
+        
+        **Example 2 - No RAG Knowledge** (simple analysis):
+        ```markdown
+        # 🏃‍♂️ Session Analysis - [Date]
+        
+        ## 📊 Performance Overview
+        - **Distance**: [X]km | **Pace**: [X:XX]/km | **RPE**: [X]/5
+        
+        ## 💪 Effort Assessment
+        - [Basic RPE analysis]
+        - [Simple performance evaluation]
+        
+        ## 💭 Your Feedback
+        - [Integration of user feedback]
+        
+        ## 🎯 Recommendations
+        - [General training advice]
+        ```
     
     ### Step 5: Update the session data in the database with the coach feedback from step 4 using the tool `update_session_with_analysis`:
+        - **MANDATORY**: This step is REQUIRED - the coach feedback MUST be stored in the database for the frontend to access it
         - **CRITICAL**: Use the EXACT SAME date from the user's original request (NOT from session metadata)
         - **CRITICAL**: The date parameter must be the original requested date, not any date from the session data
         - Store the analysis in a new field called "coach_feedback"
+        - **MANDATORY LOGGING**: Log database storage: `agent_log("analyser_agent", "info", "Storing coach feedback in database for date [date]")`
     
     ### Step 6: **CRITICAL SUCCESS HANDLING**: After calling `update_session_with_analysis`:
         - Check the response status field
         - If status is "success": 
-            - Log finish: `agent_log("analyser_agent", "finish", "Insights Successfully completed analysis of activity")`
-            - Return ONLY "Insights analysis completed successfully"
+            - **MANDATORY LOGGING**: Log successful storage: `agent_log("analyser_agent", "info", "Coach feedback successfully stored in database")`
+            - Proceed to Step 7: Workflow Validation
         - If status is "error": 
             - Log error: `agent_log("analyser_agent", "error", "Insights failed: [describe the error]")`
             - Log finish: `agent_log("analyser_agent", "finish", "Insights Failed to complete analysis of activity")`
             - Return brief error description
         - NEVER return error messages when the tool indicates success
     
-    ### Step 7: **RESPONSE FORMAT**: Your final response must be one of these two options:
-        - **Success**: "Insights analysis completed successfully" (when status = "success")
-        - **Failure**: Brief error description (only when status = "error")
+    ### Step 7: Workflow Validation
+    **MANDATORY**: Before finishing, verify that you have completed ALL required steps:
+    1. ✅ Retrieved session data using `get_session_by_date`
+    2. ✅ Retrieved RAG knowledge (maximum 2 calls)
+    3. ✅ Created coach feedback with markdown formatting
+    4. ✅ Stored coach feedback in database using `update_session_with_analysis`
     
+    **MANDATORY LOGGING**: Log validation: `agent_log("analyser_agent", "info", "Workflow validation: All steps completed successfully")`
+
     ### Step 8: Log Finish and Respond
-    Call `agent_log("analyser_agent", "finish", "Insights analysis completed successfully")`
+    Log finish: `agent_log("analyser_agent", "finish", "Insights Successfully completed analysis of activity")`
+    Return ONLY "Insights analysis completed successfully"
 
     **IMPORTANT**: In the analysis, do NOT include:
         - Activity overview (ID, name, type, date, start time, total distance, duration, average pace)
@@ -709,6 +899,12 @@ analyser_agent = LlmAgent(
     **SAFETY MECHANISM**: If you encounter any unexpected errors or cannot complete the workflow, you MUST still call the finish log:
     - `agent_log("analyser_agent", "finish", "Emergency completion - workflow interrupted")`
     - This ensures the frontend knows the agent has finished processing
+    
+    ## Workflow Completion Requirements
+    **MANDATORY**: Every workflow MUST end with one of these finish logs:
+    - `agent_log("analyser_agent", "finish", "Segmentation Only Successfully completed analysis of activity")` (for segmentation workflow)
+    - `agent_log("analyser_agent", "finish", "Insights Successfully completed analysis of activity")` (for insights workflow)
+    - `agent_log("analyser_agent", "finish", "Emergency completion - workflow interrupted")` (for error cases)
     """,
     tools=[get_session_by_date,
            segment_activity_by_pace,
@@ -950,10 +1146,13 @@ root_agent = Agent(
     ## MAIN WORKFLOWS:
 
     ### 1. Day overview for [date]
-    1. If [date] is today or in the past, you MUST always complete the following three steps:
+    1. If [date] is today or in the past, you MUST always complete the following steps:
         a. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
         b. Delegate to the `strava_agent` to get the activity data and mark the session as completed if available.
-        c. Delegate to the `analyser_agent` to analyze the activity, specifically the Main Workflow 1: Segmentation of the activity for [date] if the session was completed.
+        c. **CRITICAL RESCHEDULING LOGIC**: After strava_agent completes:
+           - If strava_agent found NO activity (session not completed) AND there was an existing AI Coach Session that ended in the past:
+             - Delegate to the `scheduler_agent` with message "Reschedule missed session for [date]"
+        d. Delegate to the `analyser_agent` to analyze the activity, specifically the Main Workflow 1: Segmentation of the activity for [date] if the session was completed.
     2. If [date] is in the future, you MUST complete the following step:
         a. Delegate to the `scheduler_agent` to get the information about planned session, weather forecast and calendar events if any.
     3. Call `agent_log("orchestrator_agent", "finish", "Day overview for [date] completed")`
@@ -970,15 +1169,13 @@ root_agent = Agent(
 
     ### 4. RAG Document Processing: [file_path]
     1. **CRITICAL**: IMMEDIATELY delegate to the `rag_agent` with the message containing the file path
-    2. The `rag_agent` will use its multi-modal capabilities to directly analyze the document as an attachment, categorize it (Training Plan or Session Analysis), and create RAG knowledge chunks
-    3. The chunks will be stored in the knowledge base and enhance future training plans and session analysis
-    4. Return confirmation of successful processing and integration
-    5. Call `agent_log("orchestrator_agent", "finish", "RAG Document Processing: [file_path] completed")`
+    2. Return confirmation of successful processing and integration
+    3. Call `agent_log("orchestrator_agent", "finish", "RAG Document Processing: [file_path] completed")`
 
     ### 5. Uploaded Plan Processing: [file_path]
     1. **CRITICAL**: IMMEDIATELY delegate to the `planner_agent` with the message containing the file path
     2. Return confirmation of successful processing and integration
-    5. Call `agent_log("orchestrator_agent", "finish", "Uploaded Plan Processing: [file_path] completed")`
+    3. Call `agent_log("orchestrator_agent", "finish", "Uploaded Plan Processing: [file_path] completed")`
 
     ### 6. Personalized Training Plans
     1. When a user wants to create a personalized training plan with their goals and fitness data, delegate to the `planner_agent` with the user's input data including:
