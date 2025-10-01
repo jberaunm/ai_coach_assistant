@@ -221,18 +221,3 @@ CHROMA_DB_PATH=./data/chroma
 ## 📝 License
 
 This project is part of CS550 coursework and is for educational purposes.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📞 Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Review agent logs for error details
-3. Ensure all API credentials are properly configured
