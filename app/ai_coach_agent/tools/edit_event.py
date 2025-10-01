@@ -7,24 +7,26 @@ from .calendar_utils import get_calendar_service, parse_datetime
 
 def edit_event(
     event_id: str,
-    summary: str,
+    date: str,
     start_time: str,
     end_time: str,
+    title: str,
 ) -> dict:
     """
     Edit an existing event in Google Calendar - change title and/or reschedule.
 
     Args:
         event_id (str): The ID of the event to edit
-        summary (str): New title/summary for the event (pass empty string to keep unchanged)
-        start_time (str): New start time (e.g., "2023-12-31 14:00", pass empty string to keep unchanged)
-        end_time (str): New end time (e.g., "2023-12-31 15:00", pass empty string to keep unchanged)
+        date (str): The date of the event in YYYY-MM-DD format
+        start_time (str): Start time in HH:MM format (24-hour)
+        end_time (str): End time in HH:MM format (24-hour)
 
     Returns:
         dict: Information about the edited event or error details
     """
     try:
         # Get calendar service
+        print(f"[CalendarAPI_tool] START: Editing event")
         service = get_calendar_service()
         if not service:
             return {
@@ -35,59 +37,61 @@ def edit_event(
         # Always use primary calendar
         calendar_id = "primary"
 
-        # First get the existing event
-        try:
-            event = (
-                service.events().get(calendarId=calendar_id, eventId=event_id).execute()
-            )
-        except Exception:
+        # Combine date and times
+        start_datetime = f"{date} {start_time}"
+        end_datetime = f"{date} {end_time}"
+
+        # Parse times
+        start_dt = parse_datetime(start_datetime)
+        end_dt = parse_datetime(end_datetime)
+
+        if not start_dt or not end_dt:
             return {
                 "status": "error",
-                "message": f"Event with ID {event_id} not found in primary calendar.",
+                "message": "Invalid date/time format. Please use YYYY-MM-DD for date and HH:MM for time.",
             }
 
-        # Update the event with new values
-        if summary:
-            event["summary"] = summary
+        # Dynamically determine timezone
+        timezone_id = "America/New_York"  # Default to Eastern Time
 
-        # Get timezone from the original event
-        timezone_id = "America/New_York"  # Default
-        if "start" in event and "timeZone" in event["start"]:
-            timezone_id = event["start"]["timeZone"]
+        try:
+            # Try to get the timezone from the calendar settings
+            settings = service.settings().list().execute()
+            for setting in settings.get("items", []):
+                if setting.get("id") == "timezone":
+                    timezone_id = setting.get("value")
+                    break
+        except Exception:
+            # If we can't get it from settings, we'll use the default
+            pass
 
-        # Update start time if provided
-        if start_time:
-            start_dt = parse_datetime(start_time)
-            if not start_dt:
-                return {
-                    "status": "error",
-                    "message": "Invalid start time format. Please use YYYY-MM-DD HH:MM format.",
-                }
-            event["start"] = {"dateTime": start_dt.isoformat(), "timeZone": timezone_id}
+        # Create event body without type annotations
+        event_body = {}
 
-        # Update end time if provided
-        if end_time:
-            end_dt = parse_datetime(end_time)
-            if not end_dt:
-                return {
-                    "status": "error",
-                    "message": "Invalid end time format. Please use YYYY-MM-DD HH:MM format.",
-                }
-            event["end"] = {"dateTime": end_dt.isoformat(), "timeZone": timezone_id}
+        # Add title
+        event_body["summary"] = title
+
+        # Add start and end times with the dynamically determined timezone
+        event_body["start"] = {
+            "dateTime": start_dt.isoformat(),
+            "timeZone": timezone_id,
+        }
+        event_body["end"] = {"dateTime": end_dt.isoformat(), "timeZone": timezone_id}
+        event_body["id"] = event_id
 
         # Update the event
         updated_event = (
             service.events()
-            .update(calendarId=calendar_id, eventId=event_id, body=event)
+            .update(calendarId=calendar_id, eventId=event_id,body=event_body)
             .execute()
         )
 
+        print(f"[CalendarAPI_tool] FINISH: Event updated")
         return {
             "status": "success",
             "message": "Event updated successfully",
-            "event_id": updated_event["id"],
-            "event_link": updated_event.get("htmlLink", ""),
         }
 
     except Exception as e:
+        print(f"[CalendarAPI_tool] ERROR: Error updating event: {str(e)}")
         return {"status": "error", "message": f"Error updating event: {str(e)}"}

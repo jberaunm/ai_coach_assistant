@@ -145,18 +145,31 @@ class ChromaService:
                         "hours": []
                     }),
                     "time_scheduled": json.dumps([]),
+                    "data_points": json.dumps({
+                        "laps": []
+                    }),
                     "session_completed": False
                 }
                 metadatas.append(session_metadata)
             
             # Add the sessions to the collection
-            self.collection.add(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas
-            )
-            
-            return "success"
+            try:
+                self.collection.add(
+                    ids=ids,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+                print(f"Successfully stored {len(sessions)} training plan sessions")
+                return "success"
+            except Exception as add_error:
+                # Check if it's a telemetry error (non-critical)
+                if "telemetry" in str(add_error).lower() or "capture()" in str(add_error):
+                    print(f"ChromaDB telemetry warning (non-critical): {str(add_error)}")
+                    # Still return success since the data was likely stored
+                    return "success"
+                else:
+                    # Re-raise non-telemetry errors
+                    raise add_error
             
         except Exception as e:
             print(f"Error storing training plan: {str(e)}")
@@ -368,6 +381,13 @@ class ChromaService:
                 except json.JSONDecodeError:
                     deserialized['time_scheduled'] = []
             
+            # Deserialize data_points
+            if 'data_points' in deserialized and isinstance(deserialized['data_points'], str):
+                try:
+                    deserialized['data_points'] = json.loads(deserialized['data_points'])
+                except json.JSONDecodeError:
+                    deserialized['data_points'] = {"laps": []}
+            
             return deserialized
         except Exception as e:
             print(f"Error deserializing metadata: {str(e)}")
@@ -387,6 +407,154 @@ class ChromaService:
         except Exception as e:
             print(f"Error retrieving today's sessions: {str(e)}")
             return []
+
+    def get_weekly_sessions(self, start_date: str) -> Dict:
+        """Get sessions for a week starting from the given date (Monday).
+        
+        Args:
+            start_date: Start date in YYYY-MM-DD format (should be a Monday)
+            
+        Returns:
+            Dict containing:
+                - status: "success" or "error"
+                - data: List of daily sessions for the week
+                - summary: Weekly summary statistics
+                - message: Description of the result
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Validate start_date format
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            except ValueError:
+                return {
+                    "status": "error",
+                    "data": None,
+                    "summary": None,
+                    "message": "Invalid date format. Use YYYY-MM-DD"
+                }
+            
+            days_since_monday = start_dt.weekday()
+
+            # Calculate the Monday of the current week
+            monday_dt = start_dt - timedelta(days=days_since_monday)
+
+            # Calculate the Sunday of the current week (6 days after Monday)
+            sunday_dt = monday_dt + timedelta(days=6)
+
+            # Format the datetime objects back into 'YYYY-MM-%d' strings
+            start_date_of_week = monday_dt.strftime("%Y-%m-%d")
+            end_date_of_week = sunday_dt.strftime("%Y-%m-%d")
+            
+            # Get all sessions for the week by querying each day individually
+            daily_sessions = {}
+            
+            for i in range(7):
+                current_date = (monday_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+                
+                # Get sessions for this specific date
+                results = self.collection.get(
+                    where={"date": current_date}
+                )
+                
+                # Check if we have any results for this date
+                if (results and 'ids' in results and results['ids'] and 
+                    len(results['ids']) > 0):
+                    
+                    # Deserialize JSON strings in metadata
+                    if 'metadatas' in results and results['metadatas'] and len(results['metadatas']) > 0:
+                        for j, metadata in enumerate(results['metadatas']):
+                            results['metadatas'][j] = self._deserialize_metadata(metadata)
+                    
+                    # Process the results for this date
+                    for j in range(len(results['ids'])):
+                        session_date = results['metadatas'][j].get('date', '')
+                        daily_sessions[session_date] = {
+                            'id': results['ids'][j],
+                            'session': results['documents'][j],
+                            'metadata': results['metadatas'][j]
+                        }
+            
+            # Create a complete week structure (Monday to Sunday)
+            week_data = []
+            total_distance_planned = 0
+            total_distance_completed = 0            
+            total_sessions = 0
+            completed_sessions = 0
+            
+            for i in range(7):
+                current_date = (monday_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+                day_name = (monday_dt + timedelta(days=i)).strftime("%A")
+                
+                if current_date in daily_sessions:
+                    session_data = daily_sessions[current_date]
+                    metadata = session_data['metadata']
+                    
+                    # Extract session information
+                    session_type = metadata.get('type', 'No Session')
+                    actual_distance = metadata.get('actual_distance', 0)
+                    planned_distance = metadata.get('distance', 0)
+                    session_completed = metadata.get('session_completed', False)
+                    
+                    # Update totals
+                    if session_type != 'Rest Day' and planned_distance > 0:
+                        total_sessions += 1
+                        total_distance_planned += planned_distance
+                        total_distance_completed += actual_distance
+                    
+                    if session_completed:
+                        completed_sessions += 1
+                    
+                    week_data.append({
+                        'date': current_date,
+                        'day_name': day_name,
+                        'session_type': session_type,
+                        'planned_distance': planned_distance,
+                        'actual_distance': actual_distance,
+                        'session_completed': session_completed,
+                        'has_activity': session_type != 'Rest Day' and actual_distance > 0,
+                        'is_today': current_date == datetime.now().strftime("%Y-%m-%d")
+                    })
+                else:
+                    # No session data for this day
+                    week_data.append({
+                        'date': current_date,
+                        'day_name': day_name,
+                        'session_type': 'No Session',
+                        'planned_distance': 0,
+                        'actual_distance': 0,
+                        'session_completed': False,
+                        'has_activity': False,
+                        'is_today': current_date == datetime.now().strftime("%Y-%m-%d")
+                    })
+            
+            # Create weekly summary
+            summary = {
+                'total_distance_planned': total_distance_planned,
+                'total_distance_completed': total_distance_completed,
+                'total_sessions': total_sessions,
+                'completed_sessions': completed_sessions,
+                'completion_rate': (completed_sessions / total_sessions * 100) if total_sessions > 0 else 0,
+                'week_start': start_date_of_week,
+                'week_end': end_date_of_week
+            }
+            
+            return {
+                "status": "success",
+                "data": week_data,
+                "summary": summary,
+                "message": f"Weekly data retrieved for {start_date_of_week} to {end_date_of_week}"
+            }
+            
+        except Exception as e:
+            print(f"Error in get_weekly_sessions: {str(e)}")
+            return {
+                "status": "error",
+                "data": None,
+                "summary": None,
+                "message": f"Error retrieving weekly sessions: {str(e)}"
+            }
 
     def get_upcoming_sessions(self, days: int = 7) -> List[Dict]:
         """Get sessions scheduled for the next n days."""
@@ -458,6 +626,60 @@ class ChromaService:
                 "data": None,
                 "count": 0,
                 "message": f"Error listing sessions: {str(e)}"
+            }
+
+    def get_activity_by_id(self, activity_id: int) -> Dict:
+        """
+        Retrieves activity data by activity_id from the database.
+        
+        Args:
+            activity_id: The Strava activity ID
+            
+        Returns:
+            Dict containing:
+                - status: "success" or "error"
+                - message: Description of the result
+                - activity_data: The activity data or None if not found
+        """
+        try:
+            activity_id_str = str(activity_id)
+            results = self.collection.get(ids=[activity_id_str])
+            
+            if not results['ids']:
+                return {
+                    "status": "error",
+                    "message": f"No activity found with ID: {activity_id}",
+                    "activity_data": None
+                }
+            
+            # Reconstruct the activity data structure
+            document = results['documents'][0]
+            metadata = results['metadatas'][0]
+            
+            # Parse data_points separately to avoid duplication
+            data_points = {}
+            if metadata.get("data_points"):
+                data_points = json.loads(metadata["data_points"])
+                # Remove data_points from metadata to avoid duplication
+                del metadata["data_points"]
+            
+            activity_data = {
+                "activity_id": activity_id,
+                "metadata": metadata,  # metadata without data_points
+                "data_points": data_points  # data_points as separate field
+            }
+            
+            return {
+                "status": "success",
+                "message": f"Found activity data for ID: {activity_id}",
+                "activity_data": activity_data
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error retrieving activity data: {str(e)}",
+                "activity_data": None
             }
 
 # Create a singleton instance

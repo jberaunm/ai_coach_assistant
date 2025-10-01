@@ -31,7 +31,7 @@ def list_events(
         }
     """
     try:
-        print(f"[CalendarAPI_tool_list_events]") 
+        print(f"[CalendarAPI_tool] START: Retrieving calendar events with start_date {start_date} and days {days}") 
         # Get calendar service
         service = get_calendar_service()
         if not service:
@@ -58,19 +58,8 @@ def list_events(
         else:
             try:
                 # Parse the provided start_date
-                requested_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
-                current_date = datetime.datetime.utcnow().date()
-                
-                if requested_date == current_date:
-                    # If the requested date is today, use current time as start_time
-                    start_time = datetime.datetime.utcnow()
-                    # Set end_time to the end of today (23:59:59)
-                    end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
-                else:
-                    # If the requested date is not today, use 00:00:00 of that specific date
-                    start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-                    # Set end_time to the end of that specific day (23:59:59)
-                    end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+                start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
             except ValueError:
                 return {
                     "status": "error",
@@ -134,12 +123,15 @@ def list_events(
                 end_time = "23:59"
             
             formatted_event = {
+                "event_id": event.get("id", " "),
                 "title": event.get("summary", "Untitled Event"),
                 "start": start_time,
                 "end": end_time,
             }
             formatted_events.append(formatted_event)
 
+        print(f"[CalendarAPI_tool] FINISH: Calendar events retrieved")
+        print(f"[CalendarAPI_tool] events: {formatted_events}")
         return {
             "status": "success",
             "message": f"Found {len(formatted_events)} event(s).",
@@ -149,8 +141,11 @@ def list_events(
         }
 
     except Exception as e:
+        print(f"[CalendarAPI_tool] ERROR: Error fetching events: {str(e)}")
         return {
             "status": "error",
             "message": f"Error fetching events: {str(e)}",
             "events": [],
         }
+
+print(list_events(start_date="2025-09-18", days=1))

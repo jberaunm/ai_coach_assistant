@@ -20,6 +20,7 @@ from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from ai_coach_agent.agent import root_agent
 from db.chroma_service import chroma_service
+
 from fastapi.middleware.cors import CORSMiddleware
 
 #
@@ -39,14 +40,19 @@ class PrintInterceptor:
         self.original_print = print
         self.interesting_patterns = [
             '[FRONTEND TO AGENT]',
-            '[FileReader_tool]',
-            '[CalendarAPI_tool_create_event]',
-            '[CalendarAPI_tool_list_events]',
-            '[WeatherAPI_tool]',
-            '[StravaAPI_tool]',
             '[PLANNER_AGENT]',
             '[SCHEDULER_AGENT]',
-            '[STRAVA_AGENT]'
+            '[STRAVA_AGENT]',
+            '[ANALYSER_AGENT]',
+            '[RAG_AGENT]',
+            '[ORCHESTRATOR_AGENT]',
+            '[FileReader_tool]',
+            '[CalendarAPI_tool]',
+            '[WeatherAPI_tool]',
+            '[StravaAPI_tool]',
+            '[chromaDB_tools]',
+            '[RAG_knowledge_base]',
+            '[ChartCreator_tool]',
         ]
     
     def __call__(self, *args, **kwargs):
@@ -78,6 +84,7 @@ def clear_current_websocket():
     """Clear the current WebSocket for log forwarding"""
     global _current_websocket
     _current_websocket = None
+
 
 # Replace the global print function
 print_interceptor = PrintInterceptor()
@@ -190,13 +197,17 @@ async def agent_to_client_messaging(
             # Only send text if it's a partial response (streaming)
             # Skip the final complete message to avoid duplication
             if part.text and event.partial:
-                message = {
-                    "mime_type": "text/plain",
-                    "data": part.text,
-                    "role": "model",
-                }
-                await websocket.send_text(json.dumps(message))
-                #print(f"[AGENT TO CLIENT]: text/plain: {part.text}")
+                text_content = part.text.strip()
+                
+                # Only skip obvious system warnings, not agent responses
+                if text_content and len(text_content) > 3:
+                    message = {
+                        "mime_type": "text/plain",
+                        "data": text_content,
+                        "role": "model",
+                    }
+                    await websocket.send_text(json.dumps(message))
+                    #print(f"[AGENT TO CLIENT]: text/plain: {text_content}")
 
             # If it's audio, send Base64 encoded audio data
             is_audio = (
@@ -216,6 +227,18 @@ async def agent_to_client_messaging(
                     #print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
     except Exception as e:
         print(f"Error in agent_to_client_messaging: {e}")
+        # Send error message to client instead of raising
+        try:
+            error_message = {
+                "mime_type": "text/plain",
+                "data": f"I apologize, but there was an error processing your request. Please try again.",
+                "role": "model",
+                "turn_complete": True,
+                "error": True
+            }
+            await websocket.send_text(json.dumps(error_message))
+        except Exception as send_error:
+            print(f"Error sending error message to client: {send_error}")
         raise
 
 
@@ -248,7 +271,15 @@ async def client_to_agent_messaging(
                 types.Blob(data=decoded_data, mime_type=mime_type)
             )
             print(f"[FRONTEND TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
-
+        elif mime_type.startswith("image/"):
+            # Send image data as binary
+            decoded_data = base64.b64decode(data)
+            
+            # Send the image data as a blob
+            live_request_queue.send_realtime(
+                types.Blob(data=decoded_data, mime_type=mime_type)
+            )
+            print(f"[FRONTEND TO AGENT]: {mime_type}: {len(decoded_data)} bytes")
         else:
             raise ValueError(f"Mime type not supported: {mime_type}")
 
@@ -275,22 +306,9 @@ FRONT_END_DIR = Path(__file__).parent.parent / "frontend"
 UPLOAD_DIR = APP_DIR / "uploads"
 PUBLIC_DIR = FRONT_END_DIR / "public"
 
-# websocket_connections is now defined globally for log forwarding
-
-# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")  # Removed
-
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# --- Removed old root and favicon routes ---
-# @app.get("/", response_class=HTMLResponse)
-# async def get():
-#     """Serves the index.html"""
-#     return FileResponse(STATIC_DIR / "index.html")
-
-# @app.get("/favicon.ico")
-# async def favicon():
-#     return FileResponse(STATIC_DIR / "favicon.ico")
 
 # --- Add a simple health check root route ---
 @app.get("/")
@@ -324,7 +342,7 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
             normalized_path = str(file_path).replace('\\', '/')  # Normalize path separators
             message = {
                 "mime_type": "text/plain",
-                "data": f"can you parse my training plan? this is the file path: {normalized_path}",
+                "data": f"Uploaded Plan Processing: {normalized_path}",
                 "role": "user"
             }
             
@@ -334,7 +352,7 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
                 # Send the message through the live_request_queue
                 content = types.Content(role="user", parts=[types.Part.from_text(text=message["data"])])
                 websocket.live_request_queue.send_content(content=content)
-                print(f"Message sent to agent through live_request_queue: {message['data']}")
+                print(f"[FRONTEND TO AGENT]: {message['data']}")
             else:
                 print(f"No live_request_queue found for session {session_id}")
             
@@ -349,6 +367,55 @@ async def upload_file(file: UploadFile = File(...), session_id: str = Query(...)
         }
     except Exception as e:
         print(f"Error in upload_file: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.post("/upload-research")
+async def upload_research_file(file: UploadFile = File(...), session_id: str = Query(...)):
+    try:        
+        # Create a safe filename
+        safe_filename = file.filename.replace(" ", "_").replace("\\", "_").replace("/", "_")
+        file_path = UPLOAD_DIR / safe_filename
+        
+        # Save the file
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        print(f"Research file saved successfully at: {file_path}")
+        
+        # Send a message through WebSocket for RAG processing
+        if session_id in websocket_connections:
+            
+            # Create a message to send to the agent for RAG processing
+            normalized_path = str(file_path).replace('\\', '/')  # Normalize path separators
+            message = {
+                "mime_type": "text/plain",
+                "data": f"RAG Document Processing: {normalized_path}",
+                "role": "user"
+            }
+            
+            # Get the live_request_queue for this session
+            websocket = websocket_connections[session_id]
+            if hasattr(websocket, 'live_request_queue'):
+                # Send the message through the live_request_queue
+                content = types.Content(role="user", parts=[types.Part.from_text(text=message["data"])])
+                websocket.live_request_queue.send_content(content=content)
+            else:
+                print(f"No live_request_queue found for session {session_id}")
+            print(f"[FRONTEND TO AGENT] RAG Document Processing: {normalized_path}")
+        else:
+            print(f"No WebSocket connection found for session {session_id}")
+        
+        return {
+            "status": "success",
+            "message": "Research file uploaded and processing started",
+            "filename": safe_filename
+        }
+    except Exception as e:
+        print(f"Error in upload_research_file: {str(e)}")
         return {
             "status": "error",
             "message": str(e)
@@ -394,6 +461,18 @@ async def websocket_endpoint(
         await asyncio.gather(agent_to_client_task, client_to_agent_task)
     except Exception as e:
         print(f"WebSocket error for session {session_id}: {e}")
+        # Send a user-friendly error message before closing the connection
+        try:
+            error_message = {
+                "mime_type": "text/plain",
+                "data": f"I apologize, but there was an unexpected error. Please try again.",
+                "role": "model",
+                "turn_complete": True,
+                "error": True
+            }
+            await websocket.send_text(json.dumps(error_message))
+        except Exception as send_error:
+            print(f"Error sending error message to client: {send_error}")
         raise  # Re-raise the exception to ensure proper error handling
     finally:
         # Remove the connection when it's closed
@@ -453,3 +532,315 @@ async def get_session_by_date(date: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
+
+@app.get("/api/weekly/{start_date}")
+async def get_weekly_sessions(start_date: str):
+    """Get weekly sessions starting from the given date (should be a Monday) in YYYY-MM-DD format."""
+    try:
+        result = chroma_service.get_weekly_sessions(start_date)
+        if result["status"] == "error":
+            # Only return 400 for invalid date format
+            if "Invalid date format" in result["message"]:
+                raise HTTPException(status_code=400, detail=result["message"])
+            else:
+                # For other errors, return 500
+                raise HTTPException(status_code=500, detail=result["message"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving weekly sessions: {str(e)}")
+
+@app.get("/api/activity/{activity_id}")
+async def get_activity_by_id_endpoint(activity_id: int):
+    """Get activity data for a specific activity_id."""
+    try:
+        result = chroma_service.get_activity_by_id(activity_id)
+        if result["status"] == "error":
+            raise HTTPException(status_code=404, detail=result["message"])
+        return result["activity_data"]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving activity: {str(e)}")
+
+@app.post("/api/analyze-chart")
+async def analyze_chart_endpoint(image_path: str = Query(...), session_id: str = Query(...)):
+    """Analyze a running chart image directly from the backend."""
+    try:
+        print(f"Received chart analysis request for session {session_id}, image: {image_path}")
+        
+        # Check if WebSocket connection exists for this session
+        if session_id not in websocket_connections:
+            raise HTTPException(status_code=404, detail="No active session found")
+        
+        websocket = websocket_connections[session_id]
+        if not hasattr(websocket, 'live_request_queue'):
+            raise HTTPException(status_code=404, detail="No active agent session found")
+        
+        # Send the analysis request to the agent
+        analysis_request = f"Analyze this chart: {image_path}"
+        content = types.Content(role="user", parts=[types.Part.from_text(text=analysis_request)])
+        websocket.live_request_queue.send_content(content=content)
+        
+        print(f"Chart analysis request sent to agent: {analysis_request}")
+        
+        return {
+            "status": "success",
+            "message": "Chart analysis request sent to agent",
+            "image_path": image_path
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in analyze_chart_endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing chart: {str(e)}")
+
+@app.get("/api/rag-knowledge")
+async def get_rag_knowledge(query: str = Query("", description="Search query for RAG knowledge"), 
+                           category: str = Query(None, description="Filter by category"), 
+                           limit: int = Query(10, description="Number of results to return")):
+    """Retrieve RAG knowledge chunks from the knowledge base."""
+    try:
+        from ai_coach_agent.tools.rag_knowledge import retrieve_rag_knowledge
+        
+        if not query:
+            # If no query provided, get all chunks
+            from ai_coach_agent.tools.rag_knowledge import get_all_rag_categories
+            from db.chroma_service import chroma_service
+            
+            rag_collection = chroma_service.client.get_collection("rag_knowledge")
+            results = rag_collection.get()
+            
+            chunks = []
+            if results['ids']:
+                for i in range(len(results['ids'])):
+                    chunk = {
+                        'id': results['ids'][i],
+                        'content': results['documents'][i],
+                        'metadata': results['metadatas'][i]
+                    }
+                    chunks.append(chunk)
+            
+            return {
+                "status": "success",
+                "chunks": chunks,
+                "total_count": len(chunks),
+                "message": f"Retrieved all {len(chunks)} knowledge chunks"
+            }
+        else:
+            # Search with query
+            result = retrieve_rag_knowledge(query, n_results=limit, category=category)
+            return result
+            
+    except Exception as e:
+        print(f"Error in get_rag_knowledge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RAG knowledge: {str(e)}")
+
+@app.get("/api/rag-categories")
+async def get_rag_categories():
+    """Get all available categories in the RAG knowledge base."""
+    try:
+        from ai_coach_agent.tools.rag_knowledge import get_all_rag_categories
+        result = get_all_rag_categories()
+        return result
+    except Exception as e:
+        print(f"Error in get_rag_categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RAG categories: {str(e)}")
+
+@app.get("/api/rag-stats")
+async def get_rag_stats():
+    """Get statistics about the RAG knowledge base with detailed source information."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        rag_collection = chroma_service.client.get_collection("rag_knowledge")
+        results = rag_collection.get()
+        
+        # Count chunks by category
+        category_counts = {}
+        if results['metadatas']:
+            for metadata in results['metadatas']:
+                category = metadata.get('category', 'Unknown')
+                category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Group chunks by source and extract detailed metadata
+        sources_info = {}
+        if results['metadatas']:
+            for i, metadata in enumerate(results['metadatas']):
+                source = metadata.get('source', 'Unknown')
+                document_id = metadata.get('document_id', 'unknown')
+                
+                if source not in sources_info:
+                    sources_info[source] = {
+                        "source": source,
+                        "document_id": document_id,
+                        "document_title": metadata.get('document_title', 'Unknown'),
+                        "document_year": metadata.get('document_year', 'Unknown'),
+                        "authors": metadata.get('authors', 'Unknown'),
+                        "journal": metadata.get('journal', 'Unknown'),
+                        "category": metadata.get('category', 'Unknown'),
+                        "chunk_count": 0,
+                        "chunks": []
+                    }
+                
+                # Add chunk information
+                chunk_info = {
+                    "chunk_id": metadata.get('chunk_id', 'unknown'),
+                    "title": metadata.get('title', 'Untitled'),
+                    "content_preview": results['documents'][i][:200] + "..." if len(results['documents'][i]) > 200 else results['documents'][i]
+                }
+                sources_info[source]["chunks"].append(chunk_info)
+                sources_info[source]["chunk_count"] += 1
+        
+        # Convert to list and sort by chunk count (descending)
+        sources_list = list(sources_info.values())
+        sources_list.sort(key=lambda x: x["chunk_count"], reverse=True)
+        
+        return {
+            "status": "success",
+            "total_chunks": len(results['ids']) if results['ids'] else 0,
+            "categories": category_counts,
+            "unique_sources": len(sources_list),
+            "sources": sources_list,
+            "message": f"RAG knowledge base contains {len(results['ids']) if results['ids'] else 0} chunks across {len(category_counts)} categories from {len(sources_list)} sources"
+        }
+        
+    except Exception as e:
+        print(f"Error in get_rag_stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving RAG stats: {str(e)}")
+
+@app.get("/api/training-plan-stats")
+async def get_training_plan_stats():
+    """Get statistics about training plans stored in ChromaDB."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        # Get all sessions from the main collection
+        results = chroma_service.collection.get()
+        
+        if not results['ids']:
+            return {
+                "status": "success",
+                "total_sessions": 0,
+                "plans": [],
+                "message": "No training plans found"
+            }
+        
+        # Group sessions by plan (we'll use date ranges to identify plans)
+        # For now, we'll treat all sessions as one plan, but this could be enhanced
+        # to group by plan metadata if we add plan_id to the metadata
+        
+        # Extract unique dates to determine plan coverage
+        dates = set()
+        session_types = {}
+        total_distance = 0
+        
+        for metadata in results['metadatas']:
+            date = metadata.get('date', '')
+            if date:
+                dates.add(date)
+            
+            session_type = metadata.get('type', 'Unknown')
+            session_types[session_type] = session_types.get(session_type, 0) + 1
+            
+            distance = metadata.get('distance', 0)
+            if isinstance(distance, (int, float)):
+                total_distance += distance
+        
+        # Sort dates to get plan range
+        sorted_dates = sorted(dates) if dates else []
+        start_date = sorted_dates[0] if sorted_dates else None
+        end_date = sorted_dates[-1] if sorted_dates else None
+        
+        # Calculate plan duration in weeks
+        plan_duration_weeks = 0
+        if start_date and end_date:
+            try:
+                from datetime import datetime
+                start = datetime.strptime(start_date, '%Y-%m-%d')
+                end = datetime.strptime(end_date, '%Y-%m-%d')
+                plan_duration_weeks = max(1, (end - start).days // 7 + 1)
+            except:
+                plan_duration_weeks = 0
+        
+        # Create plan summary
+        plan_info = {
+            "plan_id": "current_plan",
+            "start_date": start_date,
+            "end_date": end_date,
+            "duration_weeks": plan_duration_weeks,
+            "total_sessions": len(results['ids']),
+            "total_distance_km": round(total_distance, 1),
+            "session_breakdown": session_types,
+            "created_at": start_date,  # Use start date as creation date
+            "status": "active"
+        }
+        
+        return {
+            "status": "success",
+            "total_sessions": len(results['ids']),
+            "plans": [plan_info],
+            "message": f"Found training plan with {len(results['ids'])} sessions from {start_date} to {end_date}"
+        }
+        
+    except Exception as e:
+        print(f"Error in get_training_plan_stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving training plan stats: {str(e)}")
+
+@app.delete("/api/training-plan")
+async def delete_training_plan():
+    """Delete all training plan sessions from ChromaDB."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        # Get all sessions from the main collection
+        results = chroma_service.collection.get()
+        
+        if not results['ids']:
+            return {
+                "status": "success",
+                "message": "No training plans found to delete"
+            }
+        
+        # Delete all sessions
+        chroma_service.collection.delete(ids=results['ids'])
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {len(results['ids'])} training plan sessions"
+        }
+        
+    except Exception as e:
+        print(f"Error in delete_training_plan: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting training plan: {str(e)}")
+
+@app.delete("/api/rag-entry/{document_id}")
+async def delete_rag_entry(document_id: str):
+    """Delete a specific RAG entry from ChromaDB by document_id."""
+    try:
+        from db.chroma_service import chroma_service
+        
+        # Get the RAG collection
+        rag_collection = chroma_service.client.get_collection("rag_knowledge")
+        
+        # Query for chunks with the specific document_id
+        results = rag_collection.get(where={"document_id": document_id})
+        
+        if not results['ids']:
+            raise HTTPException(status_code=404, detail=f"No RAG entry found with document_id: {document_id}")
+        
+        # Delete all chunks for this document
+        rag_collection.delete(ids=results['ids'])
+        
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {len(results['ids'])} chunks for document {document_id}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in delete_rag_entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting RAG entry: {str(e)}")

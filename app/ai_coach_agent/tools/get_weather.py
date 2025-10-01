@@ -18,6 +18,7 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
     Returns:
         Dict containing weather forecast data with current conditions and hourly forecast
     """
+    print(f"[WeatherAPI_tool] START: Getting weather forecast for {date}")
     # Get API key from environment variable or use fallback
     api_key = os.getenv("WORLDWEATHER_API_KEY")
 
@@ -41,7 +42,6 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
     }
     
     try:
-        print(f"[WeatherAPI_tool]")
         response = requests.get(url, params=params)
         
         if response.status_code != 200:
@@ -72,17 +72,6 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
         
         hourly_data = weather.findall("hourly")
         
-        # Get current time to filter future hours
-        current_time = datetime.now()
-        target_date = datetime.strptime(date, "%Y-%m-%d")
-        
-        # If target date is today, filter by current hour
-        if target_date.date() == current_time.date():
-            current_hour = current_time.hour
-        else:
-            # If target date is in the future, include all hours
-            current_hour = -1
-        
         forecast_hours = []
         for hour in hourly_data:
             time_str = hour.findtext("time")
@@ -95,17 +84,16 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
             except ValueError:
                 continue
             
-            # Only include future hours
-            if hour_int > current_hour:
-                temp = hour.findtext("tempC")
-                condition = hour.findtext("weatherDesc")
+            temp = hour.findtext("tempC")
+            condition = hour.findtext("weatherDesc")
                 
-                forecast_hours.append({
-                    "time": f"{hour_int:02d}:00",
-                    "tempC": temp,
-                    "desc": condition.strip() if condition else "",
-                })
+            forecast_hours.append({
+                "time": f"{hour_int:02d}:00",
+                "tempC": temp,
+                "desc": condition.strip() if condition else "",
+            })
         
+        print(f"[WeatherAPI_tool] FINISH: Getting weather forecast for {date}")
         return {
             "status": "success",
             "date": date,
@@ -116,6 +104,7 @@ def get_weather_forecast(date: Optional[str] = None) -> Dict:
         }
         
     except Exception as e:
+        print(f"[WeatherAPI_tool] ERROR: Error retrieving weather data: {str(e)}")
         return {
             "status": "error",
             "message": f"Error retrieving weather data: {str(e)}"

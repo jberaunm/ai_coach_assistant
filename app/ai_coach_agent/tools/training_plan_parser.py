@@ -14,11 +14,11 @@ def file_reader(file_path: str) -> str:
     Returns:
         The content of the file as text, or base64 encoded if binary.
     """
-    
+ 
+    print(f"[FileReader_tool] START: Reading file: {file_path}")
     # Normalize the file path to handle different separators
     normalized_path = str(file_path).replace('\\', '/').strip()
-    print(f"[FileReader_tool]")
-    
+
     try:
         mime_type, _ = mimetypes.guess_type(normalized_path)
         
@@ -32,31 +32,8 @@ def file_reader(file_path: str) -> str:
             with open(normalized_path, 'rb') as f:
                 encoded = base64.b64encode(f.read()).decode('utf-8')
                 content = f"[BINARY FILE - base64 encoded]\n{encoded}"
+                print(f"[FileReader_tool] FINISH: Binary file: {normalized_path}")
             return content
     except Exception as e:
+        print(f"[FileReader_tool] ERROR: Error reading file: {str(e)}")
         return f"Error reading file: {str(e)}"
-
-
-#def get_today_session(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Retrieve today's session from the parsed training plan.
-
-    Args:
-        sessions: List of session dictionaries (from parse_training_plan)
-
-    Returns:
-        A dictionary with the session for today or a not-found message.
-    """
-    today_str = datetime.today().strftime("%Y-%m-%d")
-
-    for session in sessions:
-        if session["date"] == today_str:
-            return {
-                "status": "success",
-                "session": session
-            }
-
-    return {
-        "status": "not_found",
-        "message": f"No session scheduled for today ({today_str})."
-    }
