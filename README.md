@@ -59,14 +59,6 @@ Follow the prompts to:
 - Complete OAuth flow
 - Grant necessary permissions
 
-### 3. Database Initialization
-
-```bash
-# Initialize the RAG knowledge base
-cd app
-python -c "from ai_coach_agent.tools.rag_knowledge import initialize_rag_knowledge; initialize_rag_knowledge()"
-```
-
 ### 4. Start the Application
 
 #### Backend (Terminal 1)
