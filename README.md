@@ -1,4 +1,4 @@
-# CS550 - AI Running Coach Assistant
+# CS550 - Running with AI: An Agentic Coach Application
 
 An intelligent multi-agent system that provides personalized running training plans, session analysis, and coaching insights using AI agents, RAG knowledge base, and integration with Strava and Google Calendar.
 
@@ -197,14 +197,6 @@ CHROMA_DB_PATH=./data/chroma
    - Check API credentials in `.env` file
    - Ensure OAuth tokens are valid
 
-2. **Database Issues**:
-   - Check ChromaDB data directory permissions
-   - Re-initialize the database if needed
-
-3. **Frontend Build Issues**:
-   - Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-   - Check Node.js version compatibility
-
 ### Logs
 - Backend logs: Check terminal running `uvicorn main:app --reload`
 - Frontend logs: Check terminal running `npm run dev`
@@ -214,17 +206,3 @@ CHROMA_DB_PATH=./data/chroma
 
 This project is part of CS550 coursework and is for educational purposes.
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📞 Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Review agent logs for error details
-3. Ensure all API credentials are properly configured
