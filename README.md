@@ -196,23 +196,6 @@ CHROMA_DB_PATH=./data/chroma
 2. Use the RAG agent to process documents
 3. Knowledge will be automatically integrated into agent workflows
 
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **API Authentication Errors**:
-   - Re-run the setup scripts
-   - Check API credentials in `.env` file
-   - Ensure OAuth tokens are valid
-
-2. **Database Issues**:
-   - Check ChromaDB data directory permissions
-   - Re-initialize the database if needed
-
-3. **Frontend Build Issues**:
-   - Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-   - Check Node.js version compatibility
-
 ### Logs
 - Backend logs: Check terminal running `uvicorn main:app --reload`
 - Frontend logs: Check terminal running `npm run dev`
@@ -221,3 +204,7 @@ CHROMA_DB_PATH=./data/chroma
 ## 📝 License
 
 This project is part of CS550 coursework and is for educational purposes.
+
+## Project used as reference:
+https://github.com/bhancockio/adk-voice-agent/blob/main/README.md
+
